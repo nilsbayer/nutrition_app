@@ -28,6 +28,26 @@ export const user_vector = signal({
     "cholesterol": 300.0 
 })
 
+export const userRecommendationVector = {
+    "vitamin b-12": 2.4,
+    "vitamin a": 800.0,                     
+    "vitamin b-6": 1500.0,                  
+    "niacin": 15000.0,                      
+    "riboflavin (vitamin b-2)": 1200.0,
+    "thiamin (vitamin b-1)": 1150.0,
+    "vitamin c (ascorbic acid)": 82500.0,   
+    "sodium": 2000000.0,                    
+    "potassium": 4100000.0,                 
+    "phosphorus": 700000.0,                 
+    "magnesium": 315000.0,                  
+    "iron": 18000.0,                        
+    "calcium": 1000000.0,                   
+    "total_fiber": 25000000.0,              
+    "vitamin e": 15000.0,                   
+    "vitamin k": 105.0,
+    "cholesterol": 300.0 
+}
+
 export function App() {
     // const auth = useAuthUser()
 
