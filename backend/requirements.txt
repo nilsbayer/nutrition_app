@@ -1,0 +1,12 @@
+Flask
+Flask-CORS
+gunicorn
+flask_cors
+pyjwt
+pymongo
+opencv-python
+Pillow
+stripe
+flask_bcrypt
+sib_api_v3_sdk
+sentence_transformers
