@@ -1,0 +1,74 @@
+{
+    "chatbot_log": {
+        "timestamp": "2024-05-12 00:00:00",
+        "text_by_user": "What should I be eating on an ongoing basis?",
+        "answer_by_chatbot": "lorem ipsum ...",
+        "faithfulness_score": 1.0
+    },
+    "user_log": {
+        "timestamp":"2024-05-12 00:00:00",
+        "logged_foods": [
+            {
+                "food_token": "n9duueuwwbicv2e9fvu",
+                "food_name": "Rice (raw, long, integral)",
+                "amount_in_grams": 120.0
+            },
+            {
+                "food_token": "n9duueuwwbicv2e9fvu",
+                "food_name": "Seitan (raw)",
+                "amount_in_grams": 200.0
+            }
+        ],
+        "nutrient_vector": [120.0, 2.4, 110.0, 25621.0, 23.0]
+    },
+    "user": {
+        "token": "uh2uhphfhfuhc9wp92obvz3f9wehv",
+        "email": "nilsbayer@email.com",
+        "name": "Nils",
+        "password": "ihvibvibvbebv93bvu3",
+        "creation_date": "2024-05-12 00:00:00",
+        "interest_vector": [120.0, 2.4, 110.0, 25621.0, 23.0],
+        "recent_foods": [
+            {
+                "food_token": "n9duueuwwbicv2e9fvu",
+                "food_name": "Rice (raw, long, integral)",
+                "amount_in_grams": 120.0
+            },
+            {
+                "food_token": "n9duueuwwbicv2e9fvu",
+                "food_name": "Seitan (raw)",
+                "amount_in_grams": 200.0
+            }
+        ]
+    },
+    "recipes": {
+        "creation_date":"2024-05-12 00:00:00",
+        "name": "Seitan Plate",
+        "ingredients": [
+            {
+                "food_token": "n9duueuwwbicv2e9fvu",
+                "food_name": "Rice (raw, long, integral)",
+                "amount_in_grams": 120.0
+            },
+            {
+                "food_token": "n9duueuwwbicv2e9fvu",
+                "food_name": "Rice (raw, long, integral)",
+                "amount_in_grams": 120.0
+            }
+        ],
+        "nutrient_vector": [120.0, 2.4, 110.0, 25621.0, 23.0],
+        "creator": "jn92uubecobe"
+    },
+    "articles": {
+        "title": "Title here ...",
+        "text": "lorem ipsum ...",
+        "creation_date": "2024-02-12 00:00:00",
+        "creator": "jn92uubecobe"
+    },
+    "nutritionists": {
+        "token": "jn92uubecobe",
+        "name": "Maria Gomez",
+        "password": "ihvibvibvbebv93bvu3",
+        "email": "maria-nutrition@email.com"
+    }
+}

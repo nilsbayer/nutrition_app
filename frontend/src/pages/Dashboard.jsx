@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import React, { useEffect, useState } from 'react'
 import { user_vector, userRecommendationVector } from '../App'
 import { NavBar } from '../components/NavBar';
+import { v4 as uuidv4 } from 'uuid';
 
 export function Dashboard () {
     // const auth = useAuthUser()
@@ -116,7 +117,7 @@ export function Dashboard () {
                     </div>
                 </div>
 
-                <Link onClick={(e) => { window.location.href = window.location.origin+"/track-foods/" }}>
+                <Link to="/track-foods">
                     <div className="shadow-box">
                         <div className="emoji-text">
                             <span>SVG</span>
@@ -139,7 +140,7 @@ export function Dashboard () {
                     <h4>Micronutrient Overview</h4>
                     <div className="nutrient-overview">
                         {nutrientData.microNutrients.map((nutrient) => {
-                            return <div className="nutrient">
+                            return <div key={uuidv4()} className="nutrient">
                                 <span>{nutrient.name}</span>
                                 <div className="progressbar">
                                     <div className="progress" style={{width: `${nutrient.percentage}%`, backgroundColor: (nutrient.percentage > 79) ? "#50B04E" : (nutrient.percentage < 30) ? "darkred" : "orange"}}></div>
@@ -150,7 +151,7 @@ export function Dashboard () {
                     <h4>Macronutrient Overview</h4>
                     <div className="nutrient-overview">
                         {nutrientData.macroNutrients.map((nutrient) => {
-                            return <div className="nutrient">
+                            return <div key={uuidv4()} className="nutrient">
                                 <span>{nutrient.name}</span>
                                 <div className="progressbar">
                                     <div className="progress" style={{width: `${nutrient.percentage}%`, backgroundColor: (nutrient.percentage > 79) ? "#50B04E" : (nutrient.percentage < 30) ? "darkred" : "orange"}}></div>
@@ -166,12 +167,12 @@ export function Dashboard () {
                     </div>
                     <div className="recommended-foods">
                         {foodRecommendations.map((food) => {
-                            return <div className="shadow-box food-card">
+                            return <div key={uuidv4()} className="shadow-box food-card">
                                 <img width={{width: "80%"}} src="/src/img/lemon.png" />
                                 <span>{food.name}</span>
                                 <div className="rich-in-container">
                                     {food.richIn.map(item => {
-                                        return <span className="rich-in">{item}</span>
+                                        return <span key={uuidv4()} className="rich-in">{item}</span>
                                     })}
                                 </div>
                             </div>

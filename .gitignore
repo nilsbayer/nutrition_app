@@ -3,3 +3,4 @@ docker-compose.yml
 nginx/project.conf
 nginx/nginx.conf
 test.py
+test.json

@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import urllib.parse
 import logging
 from sentence_transformers import util
+from uuid import uuid4
+from openai import OpenAI
 
 app = Flask(__name__, static_url_path="/")
 CORS(app, origins=['http://localhost:3000'])
@@ -19,6 +21,9 @@ bcrypt = Bcrypt(app)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY_APP")
 enc_key = os.environ.get("ENC_KEY")
+
+# Load OpenAI client
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_KEY"))
 
 # Load database
 myclient = pymongo.MongoClient(os.environ.get("DB_URI"))
@@ -275,6 +280,8 @@ def login():
 
 @app.route("/api/get-food-recommendations", methods=["POST"])
 def get_food_recommendations():
+    # status, user = authenticate_cookies(request)
+    # if status:
     if request.method == "POST":
         user_vector = request.get_json().get("user_vector")
         user_vector = [float(value) for key, value in user_vector.items()]
@@ -294,4 +301,43 @@ def get_food_recommendations():
             
         return jsonify({"msg": True, "recommendations": recommendations_to_send})
 
+    return jsonify({"msg": False})
+
+@app.route("/api/speech-to-foods", methods=["POST"])
+def speech_to_foods():
+    # status, user = authenticate_cookies(request)
+    # if status:
+    recording = request.files.get("recording")
+    if recording.filename == '':
+        return jsonify({"msg": False, "details": "No file"})
+    
+    new_filename = str(uuid4())
+    recording.save(os.path.join("data", new_filename+".webm"))
+
+    # Run Whisper
+    audio_file= open(os.path.join("data", new_filename+".webm"), "rb")
+    transcription = openai_client.audio.transcriptions.create(
+        model="whisper-1", 
+        file=audio_file
+    )
+    response_text = transcription.text
+
+    # Delete audio file
+    os.remove(os.path.join("data", new_filename+".webm"))
+
+    # RUN FOOD EXTRACTION
+
+    # Check answer formatting
+    # response_text = response_text.replace("'", '"')
+    # response_json = json.loads(response_text)
+    
+    detected_foods = [
+        {
+            "name": "Apple",
+            "amount_in_grams": 150
+        }
+    ]
+
+    return jsonify({"msg": True, "detected_foods": response_text, "details": recording.filename})
+    
     return jsonify({"msg": False})
