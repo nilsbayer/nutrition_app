@@ -5,6 +5,10 @@ import { Dashboard } from "./pages/Dashboard";
 import { RequireAuth, useAuthUser, useSignOut } from 'react-auth-kit'
 import { notfiyUser } from "./Notifcation"
 import { TrackFoodsPage } from './pages/TrackFoodsPage'
+import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { ChatPage } from './pages/ChatPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 export const currentPopUp = signal(null)
 
@@ -86,8 +90,32 @@ export function App() {
     return <>
         <Routes>
             {/* <Route path="/login/:lang" element={<LoginPage />} /> */}
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/track-foods" element={<TrackFoodsPage />} />
+            <Route path="/" element={
+                <RequireAuth loginPath={'/login'}>
+                    <Dashboard />
+                </RequireAuth>
+            } />
+            <Route path="/track-foods" element={
+                <RequireAuth loginPath={'/login'}>
+                    <TrackFoodsPage />
+                </RequireAuth>
+            } />
+            <Route path="/chat" element={
+                <RequireAuth loginPath={'/login'}>
+                    <ChatPage />
+                </RequireAuth>
+            } />
+            <Route path="/settings" element={
+                <RequireAuth loginPath={'/login'}>
+                    <SettingsPage />
+                </RequireAuth>
+            } />
+            {/* <Route path="/" element={<Dashboard />} /> */}
+            {/* <Route path="/track-foods" element={<TrackFoodsPage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/settings" element={<SettingsPage />} /> */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
         </Routes>
     </>
 }

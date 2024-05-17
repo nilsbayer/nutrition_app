@@ -227,6 +227,7 @@ h3, .emoji-text span, h4 {
     align-items: center;
     gap: 1rem;
     padding: 2dvh 2dvw;
+    margin: 0;
 }
 
 .food-details {
@@ -257,4 +258,119 @@ h3, .emoji-text span, h4 {
     align-items: center;
     color: white;
     gap: 2rem;
+}
+
+.typing-container {
+
+}
+
+.messages {
+    display: flex;
+    flex-direction: column;
+}
+
+.message {
+    box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    width: fit-content;
+    max-width: 80%;
+    position: relative;
+}
+
+.app-message {
+    background-color: white;
+    margin: 0 0 6dvh 0;
+    padding: 2.5dvh 2.5dvh 5dvh 2.5dvh;
+}
+
+.user-message {
+    background-color: #DA9759;
+    color: white;
+    position: relative;
+    align-self: flex-end;
+    margin: 0 0 3dvh 0;   
+    padding: 2.5dvh;
+}
+
+.faithfulness-container {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateY(-50%);
+    width: max-content;
+    border-radius: 10px;
+    background-color: #DBECDB;
+    color: #80A480;
+    padding: 1.25dvh;
+    font-size: .6rem;
+}
+
+.text-field-container {
+    width: 100dvw;
+    height: 15dvh;
+    background-color: #80A480;
+    padding: 5dvh 5dvw;
+    display: flex;
+    align-items: center;
+    position: fixed;
+    bottom: 10dvh;
+    left: 0;
+}
+
+.text-field {
+    border-radius: 10px;
+    background-color: #B5CDB5;
+    padding: 2.5dvh;
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+    gap: 1rem; 
+    color: white;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.text-field textarea {
+    width: 100%;
+    resize: none;
+    overflow-y: scroll;
+    background-color: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 1rem;
+}
+
+.text-field textarea::placeholder {
+    color: white;
+}
+
+.send-btn {
+    background-color: #DBECDB;
+    color: #2F7D2D;
+    border-radius: 10px;
+    padding: 1.25dvh 1.25dvw;
+    text-align: center;
+    transition: all .2s ease-out;
+}
+
+.send-btn:hover {
+    background-color: #bdd1bd;
+}
+
+input[type='text'] {
+    border: none;
+    outline: none;
+    font-size: 1rem;
+}
+
+.input-shadow-box {
+    display: flex;
+    padding: 2.5dvh;
+    align-items: center;
+}
+
+.input-shadow-box input {
+    height: 100%;
+    width: 100%;
 }

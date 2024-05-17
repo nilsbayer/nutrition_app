@@ -11,9 +11,21 @@ import base64
 from datetime import datetime, timedelta
 import urllib.parse
 import logging
-from sentence_transformers import util
+from sentence_transformers import util, SentenceTransformer
 from uuid import uuid4
 from openai import OpenAI
+from ragas import evaluate
+from datasets import Dataset
+from ragas.metrics import (
+    faithfulness,
+    answer_relevancy,
+    context_precision,
+    context_relevancy,
+    context_recall,
+    answer_similarity,
+    answer_correctness,
+)
+import pandas as pd
 
 app = Flask(__name__, static_url_path="/")
 CORS(app, origins=['http://localhost:3000'])
@@ -23,12 +35,20 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY_APP")
 enc_key = os.environ.get("ENC_KEY")
 
 # Load OpenAI client
-openai_client = OpenAI(api_key=os.environ.get("OPENAI_KEY"))
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Load database
+myclient1 = pymongo.MongoClient(os.environ.get("DB_PAPERS"))
+db1 = myclient1["papers"]
+paper_col = db1["paper_embeds"]
+
 myclient = pymongo.MongoClient(os.environ.get("DB_URI"))
 db = myclient["foods"]
-mongo_col = db["nutrient_data"]
+nutrient_col = db["nutrient_data"]
+user_col = db["users"]
+chatbot_logs_col = db["chatbot_logs_normal"]
+
+sbert = SentenceTransformer("all-MiniLM-L6-v2")
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -88,7 +108,7 @@ unit_table = {
     "g": 1000000.0
 }
 
-for food in mongo_col.find():
+for food in nutrient_col.find():
     this_food_dict = {}
     for i in food.get("nutrients"):
         if i.get("nutrient") == "Vitamin B-12":
@@ -171,15 +191,73 @@ def authenticate_cookies(request):
         if jwt.decode(auth_token, enc_key, algorithms=["HS256"]).get("email") != user_email:
             return [False, "_"]
         
-        user = mongo_col.find_one({ "email": user_email })
-        # app.logger.info(user)
-        if user != None and user.get("tours") != None:
+        user = user_col.find_one({ "email": user_email })
+        app.logger.info(user)
+        if user != None:
             return [True, user]
         else:
             return [False, "_"]
         
     else:
         return [False, "_"]
+
+
+def run_query_and_evaluat_web_app(query):
+    if not query: return "Error, please enter query and ground_truth"
+    # Embed query
+    print("Embedding query")
+    query_embed = sbert.encode(query)
+
+    print("Vector search")
+    # Vector search in MongoDB vector index
+    pipeline = [
+        {
+            '$vectorSearch': {
+                'index': 'vector_index',
+                'path': 'sbert_embedding', 
+                'queryVector': query_embed.tolist(), 
+                'numCandidates': 200, 
+                'limit': 5
+            }
+        }
+    ]
+    result = [i.get("text") for i in paper_col.aggregate(pipeline)]
+
+    print("Prompting LLM")
+    # Query LLM with context docs
+    llm_query = f"""
+    You are an expert in nutrition science and you are implemented as a chatbot in a nutrition app, helping users to track their diet and learn more about nutrition.
+    A user asked a question to you and we found the following relevant information from academic papers on nutrition and health science:
+    {" // ".join(result)}
+
+    User question: {query}
+    """
+    llm_res = openai_client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+            "role": "user",
+            "content": llm_query
+            }
+        ],
+        temperature=0,
+        max_tokens=2000,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+
+    print("RAGAS evaluation started")
+    # Prepare data format for RAGAS
+    df = pd.DataFrame([[query, result, llm_res.choices[0].message.content]], columns=["question", "contexts", "answer"])
+    eval_data = Dataset.from_dict(df)
+    ragas_result = evaluate(
+        dataset=eval_data,
+        metrics=[
+            faithfulness
+        ]
+    )
+    return llm_res.choices[0].message.content, ragas_result.get("faithfulness")
 
 
 "***************************** Routes *****************************"
@@ -191,7 +269,7 @@ def login():
             user_email = request.get_json().get("email")
             user_pwd = request.get_json().get("password")
 
-            user = mongo_col.find_one({ "email": user_email })
+            user = user_col.find_one({ "email": user_email })
             if user != None:
 
                 is_valid = bcrypt.check_password_hash(user.get("password"), user_pwd)
@@ -203,7 +281,8 @@ def login():
                         "msg": "success",
                         "token": encoded,
                         "email": str(user_email),
-                        "lang": str(user.get("language"))
+                        "name": user.get("name"),
+                        "recent_foods": user.get("recent_foods")
                     })
             else:
                 return jsonify({"msg": "error", "details": "user not found"})
@@ -220,7 +299,7 @@ def login():
 #             iban = request.get_json().get("iban")
 
 #             # Check whether user with email address already exists
-#             if mongo_col.find_one({ "email": user_email }) != None:
+#             if nutrient_col.find_one({ "email": user_email }) != None:
 #                 return jsonify({ "msg": "Ya hay una cuenta con este correo electronico." })
 
 #             # Create new user instance
@@ -229,7 +308,7 @@ def login():
 #             # Check whether UUID is already given
 #             while True:
 #                 this_uuid = str(uuid.uuid1())
-#                 if mongo_col.find_one({ "id": this_uuid }) == None:
+#                 if nutrient_col.find_one({ "id": this_uuid }) == None:
 #                     break
 
 #             # Stripe account creation
@@ -256,7 +335,7 @@ def login():
 #                 "customers": []
 #             }
 #             # Add new user entry in database
-#             mongo_col.insert_one(new_user)
+#             nutrient_col.insert_one(new_user)
 
 #             # Create Stripe account setup page link
 #             # account_link = stripe.AccountLink.create(
@@ -280,64 +359,166 @@ def login():
 
 @app.route("/api/get-food-recommendations", methods=["POST"])
 def get_food_recommendations():
-    # status, user = authenticate_cookies(request)
-    # if status:
-    if request.method == "POST":
-        user_vector = request.get_json().get("user_vector")
-        user_vector = [float(value) for key, value in user_vector.items()]
+    status, user = authenticate_cookies(request)
+    if status:
+        if request.method == "POST":
+            user_vector = request.get_json().get("user_vector")
+            user_vector = [float(value) for key, value in user_vector.items()]
 
-        scores = util.cos_sim(user_vector, nutrient_vectors).tolist()[0]
-        sorted_indexes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-        top_five_indexes = sorted_indexes[:5]
+            scores = util.cos_sim(user_vector, nutrient_vectors).tolist()[0]
+            sorted_indexes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+            top_five_indexes = sorted_indexes[:5]
 
-        recommendations_to_send = []
-        for i in top_five_indexes:
-            recommendations_to_send.append({
-                "name": food_names[i],
-                "richIn": [
-                    "+ Vitamin A", "+ Vitamin C", "+ Potassium"
-                ]
-            })
-            
-        return jsonify({"msg": True, "recommendations": recommendations_to_send})
+            recommendations_to_send = []
+            for i in top_five_indexes:
+                recommendations_to_send.append({
+                    "name": food_names[i],
+                    "richIn": [
+                        "+ Vitamin A", "+ Vitamin C", "+ Potassium"
+                    ]
+                })
+                
+            return jsonify({"msg": True, "recommendations": recommendations_to_send})
 
     return jsonify({"msg": False})
 
 @app.route("/api/speech-to-foods", methods=["POST"])
 def speech_to_foods():
-    # status, user = authenticate_cookies(request)
-    # if status:
-    recording = request.files.get("recording")
-    if recording.filename == '':
-        return jsonify({"msg": False, "details": "No file"})
-    
-    new_filename = str(uuid4())
-    recording.save(os.path.join("data", new_filename+".webm"))
+    status, user = authenticate_cookies(request)
+    if status:
+        recording = request.files.get("recording")
+        if recording.filename == '':
+            return jsonify({"msg": False, "details": "No file"})
+        
+        new_filename = str(uuid4())
+        recording.save(os.path.join("data", new_filename+".webm"))
 
-    # Run Whisper
-    audio_file= open(os.path.join("data", new_filename+".webm"), "rb")
-    transcription = openai_client.audio.transcriptions.create(
-        model="whisper-1", 
-        file=audio_file
-    )
-    response_text = transcription.text
+        # Run Whisper
+        audio_file= open(os.path.join("data", new_filename+".webm"), "rb")
+        transcription = openai_client.audio.transcriptions.create(
+            model="whisper-1", 
+            file=audio_file
+        )
+        response_text = transcription.text
 
-    # Delete audio file
-    os.remove(os.path.join("data", new_filename+".webm"))
+        # Delete audio file
+        os.remove(os.path.join("data", new_filename+".webm"))
 
-    # RUN FOOD EXTRACTION
+        if len(response_text) > 0:
+            # RUN FOOD EXTRACTION
+            final_prompt = f"""\
+            You are a food expert. Please extract the ingredients from the foods as well as their estimated amounts, measured in grams, from the text below. 
+            Split dishes into the single ingredients. For example, if the user says 'hamburger', please split it into probable ingredients, like 'burger bun', 'beef patty', 'lettuce' and 'onions'.
+            Please respond with a JSON array where each item is an object with the key ingredient and amount_in_grams.
+            Text: {response_text}
+            """
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo-16k",
+                messages=[
+                    {
+                    "role": "user",
+                    "content": final_prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=5000,
+                top_p=1,
+                frequency_penalty=0,
+                presence_penalty=0
+            )
+            final_response = response.choices[0].message.content
 
-    # Check answer formatting
-    # response_text = response_text.replace("'", '"')
-    # response_json = json.loads(response_text)
-    
-    detected_foods = [
-        {
-            "name": "Apple",
-            "amount_in_grams": 150
-        }
-    ]
+            # Check answer formatting
+            try:
+                final_response = eval(final_response)
+                return jsonify({"msg": True, "detected_foods": final_response, "details": recording.filename})
+            except:
+                return jsonify({"msg": False, "details": "formatting issue"})
 
-    return jsonify({"msg": True, "detected_foods": response_text, "details": recording.filename})
-    
-    return jsonify({"msg": False})
+    return jsonify({"msg": False, "details": "end"})
+
+@app.route("/api/process-message", methods=["POST"])
+def process_message():
+    status, user = authenticate_cookies(request)
+    if status:
+        if len(request.get_json().get('userMessage')) > 0 and request.get_json().get('userMessage') != None and len(request.get_json().get('chatSession')) > 0 and request.get_json().get('chatSession') != None:
+            # Run RAG process
+            answer, faithfulness = run_query_and_evaluat_web_app(request.get_json().get('userMessage'))
+
+            # Check for existing conversation doc in chatbot_logs_col
+            res = chatbot_logs_col.find_one({
+                "chat_session": request.get_json().get('chatSession'),
+                "user_token": user.get("token")
+            })
+            
+            # Save message to database 
+            if res:
+                chatbot_logs_col.update_one({
+                    "chat_session": request.get_json().get('chatSession'),
+                    "user_token": user.get("token")
+                }, {
+                    "$push": {
+                        "conversation": {
+                            "role": "user",
+                            "text": request.get_json().get('userMessage'),
+                        }
+                    }
+                })
+                chatbot_logs_col.update_one({
+                    "chat_session": request.get_json().get('chatSession'),
+                    "user_token": user.get("token")
+                }, {
+                    "$push": {
+                        "conversation": {
+                            "role": "agent",
+                            "text": answer,
+                            "faithfulness": faithfulness
+                        }
+                    }
+                })
+                messages = res.get("conversation")
+                messages.extend([
+                    {
+                        "role": "user",
+                        "text": request.get_json().get('userMessage')
+                    },
+                    {
+                        "role": "agent",
+                        "text": answer,
+                        "faithfulness": faithfulness 
+                    }
+                ])
+                return jsonify({"msg": True, "messages": messages})
+            
+            else:
+                chatbot_logs_col.insert_one({
+                    "timestamp": datetime.now(),
+                    "user_token": user.get("token"),
+                    "conversation": [
+                        {
+                            "role": "user",
+                            "text": request.get_json().get('userMessage')
+                        },
+                        {
+                            "role": "agent",
+                            "text": answer,
+                            "faithfulness": faithfulness 
+                        }
+                    ],
+                    "chat_session": request.get_json().get('chatSession')
+                })
+                return jsonify({"msg": True, "messages": [
+                    {
+                        "role": "user",
+                        "text": request.get_json().get('userMessage')
+                    },
+                    {
+                        "role": "agent",
+                        "text": answer,
+                        "faithfulness": faithfulness 
+                    }
+                ]})
+        else:
+            return jsonify({"msg": False, "details": "wrong input"})
+        
+    return jsonify({"msg": False, "details": "end", "status": status, "user": user})
