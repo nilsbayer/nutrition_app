@@ -86,7 +86,7 @@ export function ChatPage() {
         <div className="content-container">
             <div className="messages">
                 <div style={{padding: "2.5dvh"}} className="message app-message">
-                    <span>👋🏼 Hey Maria, what do you want to talk about today? Just ask me anything.</span>
+                    <span>👋🏼 Hey {user.name}, what do you want to talk about today? Just ask me anything.</span>
                 </div>
                 {allMessages.map((message, index) => {
                     if (message.role === "user") {

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { user_vector } from '../App'
 import { NavBar } from '../components/NavBar';
 import { AudioRecorder, useAudioRecorder } from 'react-audio-voice-recorder';
+import { notfiyUser } from '../Notifcation';
 
 export function TrackFoodsPage () {
     const auth = useAuthUser()
@@ -16,10 +17,11 @@ export function TrackFoodsPage () {
     const [ loggedFoods, setLoggedFoods ] = useState(null)
     const [ recentlyLoggedFoods, setRecentlyLoggedFoods ] = useState(null)
     const [ foodSuggestions, setFoodSuggestions ] = useState(null)
+    const [ foodSearch, setFoodSearch ] = useState(null)
 
     // Get Recently Logged foods from database
     useEffect(() => {
-        
+
     }, [])
 
     const {
@@ -70,6 +72,33 @@ export function TrackFoodsPage () {
         return data;
     }
 
+    function handleFoodSearch() {
+        searchFoods({
+            query: foodSearch
+        })
+        .then(data => {
+            if (data.msg) {
+                setFoodSuggestions(data.foods)
+            }   
+            else {
+                notfiyUser("Technical error")
+            }
+        })
+    }
+
+    async function searchFoods (inputData) {
+        const response = await fetch(window.location.origin+'/api/search-foods', {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(inputData)
+        });
+        const data = await response.json();
+        return data;
+    }
+
     if (typingChosen) {
         return <>
         <div className="content-container">
@@ -90,10 +119,10 @@ export function TrackFoodsPage () {
             </div>
             <div className="typing-container">
                 <div className="shadow-box h1 input-shadow-box">
-                    <input type="text" placeholder='Enter a food name ...' />
+                    <input value={foodSearch} onChange={(e) => {setFoodSearch(e.target.value); handleFoodSearch()}} type="text" placeholder='Enter a food name ...' />
                 </div>
                 <div className="foods">
-
+                    
                 </div>
             </div>
             <NavBar />

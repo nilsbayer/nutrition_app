@@ -33,7 +33,7 @@ export function LoginPage() {
                         token: res.token,
                         expiresIn: 604800,
                         tokenType: "Bearer",
-                        authState: { email: res.email, language: res.name }
+                        authState: { email: res.email, name: res.name }
                     }
                 )){
                     window.location.href = window.location.origin

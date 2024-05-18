@@ -6,11 +6,8 @@ import { NavBar } from '../components/NavBar';
 import { v4 as uuidv4 } from 'uuid';
 
 export function Dashboard () {
-    // const auth = useAuthUser()
-    // const user = auth()
-    const user = {
-        name: "Maria"
-    }
+    const auth = useAuthUser()
+    const user = auth()
 
     console.log("User vector", user_vector.value)
 
