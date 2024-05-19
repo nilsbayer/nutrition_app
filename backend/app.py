@@ -26,6 +26,7 @@ from ragas.metrics import (
     answer_correctness,
 )
 import pandas as pd
+from bson import ObjectId, BSON
 
 app = Flask(__name__, static_url_path="/")
 CORS(app, origins=['http://localhost:3000'])
@@ -47,6 +48,7 @@ db = myclient["foods"]
 nutrient_col = db["nutrient_data"]
 user_col = db["users"]
 chatbot_logs_col = db["chatbot_logs_normal"]
+user_logs_col = db["user_logs"]
 
 sbert = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -431,9 +433,91 @@ def speech_to_foods():
             # Check answer formatting
             try:
                 final_response = eval(final_response)
-                return jsonify({"msg": True, "detected_foods": final_response, "details": recording.filename})
+                app.logger.info(f"******************** {str(final_response)}")
+                # Check for keys in list's items
+                if len(final_response) == 0:
+                    return jsonify({"msg": False, "details": "formatting issue, no entries"})
+
+                for i in final_response:
+                    if not i.get("ingredient") and not i.get("amount_in_grams"):
+                        return jsonify({"msg": False, "details": "formatting issue, keys"})
+
             except:
                 return jsonify({"msg": False, "details": "formatting issue"})
+            
+            try:
+                # Turn LLM detections to database food entries with name, and id
+                starting_nutrient_vector = [float(0) for _ in range(17)]
+
+                db_foods = []
+                for llm_food in final_response:
+                    app.logger.info(f"******************** LLM FOOD ITEM: {str(llm_food)}")
+                    # Find closest food name wise in db
+                    query_embed = sbert.encode(str(llm_food.get("ingredient")))
+                    pipeline = [
+                        {
+                            '$vectorSearch': {
+                                'index': 'food_name_search',
+                                'path': 'food_embedding', 
+                                'queryVector': query_embed.tolist(), 
+                                'numCandidates': 200, 
+                                'limit': 1
+                            }
+                        }
+                    ]
+                    db_food = [i for i in nutrient_col.aggregate(pipeline)]
+                    app.logger.info(f"******************** DB FOOD ITEM 0: {str(db_food[0])}")
+                    # Get the factor based on 1.0 being 100g
+                    grams_factor = float(llm_food.get("amount_in_grams")) / 100.0
+                    # calculate the nutrient amounts in the nutrient vector
+                    this_foods_nutrient_vector = [i*grams_factor for i in db_food[0].get("nutrient_vector")] 
+                    # Add this foods nutrient vector to the starting/changing vector
+                    starting_nutrient_vector = [a + b for a, b in zip(this_foods_nutrient_vector, starting_nutrient_vector)]
+
+                    db_foods.append({
+                        "food_name": db_food[0].get("food"),
+                        "food_id": db_food[0].get("_id"),
+                        "amount_in_grams": float(llm_food.get("amount_in_grams")),
+                        "dish": "lunch"
+                    })
+
+                # Check for existing db entry
+                res = user_logs_col.find_one({
+                    "date": str(datetime.today())[:10]
+                })
+                if res:
+                    # Sum up the newly created nutrient vector and the pre-existing one
+                    new_nutrient_vector = [a + b for a, b in zip(res.get("nutrient_vector"), starting_nutrient_vector)]
+
+                    # Update database with newly tracked foods for the day
+                    user_logs_col.update_one({
+                        "date": str(datetime.today())[:10],
+                        "user_id": user.get("_id")
+                    }, {
+                        "$push": {
+                            "logged_foods": {
+                                "$each": db_foods
+                            }
+                        },
+                        "$set": {
+                            "nutrient_vector": new_nutrient_vector
+                        }
+                    })
+                else:
+                    # Create first doc for that day
+                    user_logs_col.insert_one({
+                        "date": str(datetime.today())[:10],
+                        "user_id": user.get("_id"),
+                        "logged_foods": db_foods,
+                        "nutrient_vector": starting_nutrient_vector
+                    })
+
+                for detected_food in db_foods:
+                    detected_food.update({"food_id": str(detected_food.get("food_id"))})
+
+                return jsonify({"msg": True, "detected_foods": db_foods, "details": recording.filename})
+            except:
+                return jsonify({"msg": False, "details": "database issue"})
 
     return jsonify({"msg": False, "details": "end"})
 
@@ -521,4 +605,46 @@ def process_message():
         else:
             return jsonify({"msg": False, "details": "wrong input"})
         
-    return jsonify({"msg": False, "details": "end", "status": status, "user": user})
+    return jsonify({"msg": False, "details": "end"})
+
+@app.route("/api/search-foods", methods=["POST"])
+def search_foods():
+    status, user = authenticate_cookies(request)
+    if status:
+        if request.get_json().get("query") and len(request.get_json().get("query")) > 0:
+            # Search for food names based on query by user
+            query_embed = sbert.encode(str(request.get_json().get("query")))
+            pipeline = [
+                {
+                    '$vectorSearch': {
+                        'index': 'food_name_search',
+                        'path': 'food_embedding', 
+                        'queryVector': query_embed.tolist(), 
+                        'numCandidates': 200, 
+                        'limit': 10
+                    }
+                }
+            ]
+            results = [i.get("food") for i in nutrient_col.aggregate(pipeline)]
+
+            return jsonify({"msg": True, "query_results": results})
+
+    return jsonify({"msg": False, "details": "end"})
+
+@app.route("/api/get-todays-foods", methods=["GET"])
+def get_todays_foods():
+    status, user = authenticate_cookies(request)
+    if status:
+        db_foods = user_logs_col.find_one({
+            "date": str(datetime.today())[:10],
+            "user_id": user.get("_id")
+        })
+        if not db_foods:
+            return jsonify({"msg": True, "foods": []})
+        
+        for detected_food in db_foods.get("logged_foods"):
+            detected_food.update({"food_id": str(detected_food.get("food_id"))})
+
+        return jsonify({"msg": True, "foods": db_foods.get("logged_foods")})
+    
+    return jsonify({"msg": False, "details": "end"})

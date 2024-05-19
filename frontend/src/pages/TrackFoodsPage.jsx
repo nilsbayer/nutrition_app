@@ -1,6 +1,6 @@
 import {useAuthUser} from 'react-auth-kit'
 import { Link } from 'react-router-dom';
-import React, { useEffect, useState } from 'react'
+import React, { useDeferredValue, useEffect, useState, useTransition } from 'react'
 import { user_vector } from '../App'
 import { NavBar } from '../components/NavBar';
 import { AudioRecorder, useAudioRecorder } from 'react-audio-voice-recorder';
@@ -17,11 +17,12 @@ export function TrackFoodsPage () {
     const [ loggedFoods, setLoggedFoods ] = useState(null)
     const [ recentlyLoggedFoods, setRecentlyLoggedFoods ] = useState(null)
     const [ foodSuggestions, setFoodSuggestions ] = useState(null)
-    const [ foodSearch, setFoodSearch ] = useState(null)
+    const [ foodSearch, setFoodSearch ] = useState("")
+    const deferredSearch = useDeferredValue(foodSearch)
 
     // Get Recently Logged foods from database
     useEffect(() => {
-
+        fetchTodaysFoods()
     }, [])
 
     const {
@@ -56,7 +57,8 @@ export function TrackFoodsPage () {
         fetchAudio(formData)
         .then(data => {
             if (data.msg) {
-                setLoggedFoods(data.detected_foods)
+                // setLoggedFoods(data.detected_foods)
+                fetchTodaysFoods()
             }
         })
 
@@ -71,20 +73,38 @@ export function TrackFoodsPage () {
         const data = await response.json();
         return data;
     }
-
-    function handleFoodSearch() {
-        searchFoods({
-            query: foodSearch
+    
+    async function fetchTodaysFoods () {
+        const response = await fetch(window.location.origin+'/api/get-todays-foods', {
+            method: "GET",
+            credentials: "same-origin"
         })
-        .then(data => {
+        .then(res => res.json().then(data => {
             if (data.msg) {
-                setFoodSuggestions(data.foods)
+                setLoggedFoods(data.foods)
             }   
             else {
-                notfiyUser("Technical error")
+                notfiyUser("Technical error when getting today's logged foods")
             }
         })
+        )
     }
+
+    useEffect(() => {
+        if (deferredSearch.length > 1) {
+            searchFoods({
+                query: deferredSearch
+            })
+            .then(data => {
+                if (data.msg) {
+                    setFoodSuggestions(data.query_results)
+                }   
+                else {
+                    notfiyUser("Technical error")
+                }
+            })
+        }
+    }, [deferredSearch])
 
     async function searchFoods (inputData) {
         const response = await fetch(window.location.origin+'/api/search-foods', {
@@ -103,7 +123,7 @@ export function TrackFoodsPage () {
         return <>
         <div className="content-container">
             <div style={{display: "grid", gridTemplateColumns: "1fr 4fr", gap: "1rem"}}>
-                <div className='shadow-box h1' onClick={() => {setTypingChosen(false)}}>
+                <div className='shadow-box h1' onClick={() => {setTypingChosen(false); setFoodSearch(""); setFoodSuggestions(null)}}>
                     Back
                 </div>
                 <div className="shadow-box h1">
@@ -119,10 +139,18 @@ export function TrackFoodsPage () {
             </div>
             <div className="typing-container">
                 <div className="shadow-box h1 input-shadow-box">
-                    <input value={foodSearch} onChange={(e) => {setFoodSearch(e.target.value); handleFoodSearch()}} type="text" placeholder='Enter a food name ...' />
+                    <input value={foodSearch} onChange={(e) => {setFoodSearch(e.target.value)}} type="text" placeholder='Enter a food name ...' />
                 </div>
                 <div className="foods">
-                    
+                    {(foodSuggestions) ? foodSuggestions.map((sug, index) => {
+                        return <div key={index} className="shadow-box food">
+                            <img src="/src/img/lemon.png" alt="" className='food-img' />
+                            <div className='food-details'>
+                                <span>{sug}</span>
+                            </div>
+                            <span className="prim-btn">ADD</span>
+                        </div>
+                    }) : ""}
                 </div>
             </div>
             <NavBar />
@@ -198,16 +226,16 @@ export function TrackFoodsPage () {
             {(loadingFoods) ? <div style={{color: "white"}}>Loading food items</div> : ""}
             <div className="foods">
                 {(loggedFoods) ? loggedFoods.map((foodItem, index) => {
-                    return <div key={index} className="shadow-box food">
+                    return <div key={index} className="shadow-box food" style={{marginTop: "2rem"}}>
                         <img src="/src/img/lemon.png" alt="" className='food-img' />
                         <div className='food-details'>
-                            <span>{foodItem.ingredient}</span>
+                            <span>{foodItem.food_name}</span>
                             <span>{foodItem.amount_in_grams} g</span>
                         </div>
                         <div className="cancel-btn"></div>
                         {/* <span className="prim-btn">ADD</span> */}
                     </div>
-                }) : ""}
+                }) : "Fetching logged foods"}
             </div>
             <div className="recent-foods-container">
                 <h3>Recently logged foods</h3>
