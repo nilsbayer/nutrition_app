@@ -44,7 +44,7 @@ export function ChatPage() {
                     text: userMessage
                 },
                 {
-                    role: "agent",
+                    role: "system",
                     text: "Writing ..."
                 }
             ]
@@ -94,7 +94,7 @@ export function ChatPage() {
                             <span>{message.text}</span>
                         </div>
                     }
-                    else if (message.role === "agent") {
+                    else if (message.role === "system") {
                         return <div key={index} className="message app-message">
                             <span>{message.text}</span>
                             {(message.faithfulness) ? <div className="faithfulness-container">{parseInt(message.faithfulness*100)}% based on academic papers</div> : ""}

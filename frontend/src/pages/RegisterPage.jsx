@@ -7,6 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 
 export function RegisterPage() {
     return <>
-        <h1>Login to your mismicros</h1>
+        <h1>Create your own planty micros account</h1>
     </>
 }

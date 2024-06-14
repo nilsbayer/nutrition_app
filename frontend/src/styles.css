@@ -358,7 +358,7 @@ h3, .emoji-text span, h4 {
     background-color: #bdd1bd;
 }
 
-input[type='text'] {
+input[type='text'], input[type='password'] {
     border: none;
     outline: none;
     font-size: 1rem;
@@ -373,4 +373,76 @@ input[type='text'] {
 .input-shadow-box input {
     height: 100%;
     width: 100%;
+}
+
+.login-input {
+    padding: .5rem 1rem;
+    border-radius: 10px;
+    background-color: white;
+    width: 100%;
+}
+
+.login-btn {
+    padding: .75rem 2rem;
+    border-radius: 10px;
+    background-color: #DA9759;
+    color: white;
+    border: none;
+    outline: none;
+    margin-top: 2rem;
+    width: fit-content;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    align-items: center;
+}
+
+.rerouting {
+    margin-top: 7rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    color: white;
+}
+
+.rerouting a {
+    color: white;
+    text-decoration: underline;
+}
+
+.loading-container {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+}
+
+.loading-circle span {
+    font-weight: 400;
+}
+
+.loading-circle {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border-bottom: 2px solid white;
+    border-right: 2px solid white;
+    border-left: 2px solid white;
+    border-top: 2px solid #DA9759;
+    display: inline-block;
+    animation: move-loading-circle 1s infinite linear;
+    transform: rotate(0);
+}
+
+@keyframes move-loading-circle {
+    from {
+        transform: rotate(0);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }

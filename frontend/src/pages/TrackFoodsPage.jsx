@@ -49,6 +49,7 @@ export function TrackFoodsPage () {
     useEffect(() => {
         if (!recordingBlob) return;
         
+        setLoadingFoods(true)
         // recordingBlob will be present at this point after 'stopRecording' has been called
         console.log(recordingBlob)
         const url = URL.createObjectURL(recordingBlob);
@@ -58,6 +59,7 @@ export function TrackFoodsPage () {
         .then(data => {
             if (data.msg) {
                 // setLoggedFoods(data.detected_foods)
+                setLoadingFoods(false)
                 fetchTodaysFoods()
             }
         })
@@ -73,14 +75,26 @@ export function TrackFoodsPage () {
         const data = await response.json();
         return data;
     }
+
+    async function fetchImage (formData) {
+        const response = await fetch(window.location.origin+'/api/detect-food-image', {
+            method: "POST",
+            credentials: "same-origin",
+            body: formData
+        });
+        const data = await response.json();
+        return data;
+    }
     
     async function fetchTodaysFoods () {
+        setLoadingFoods(true)
         const response = await fetch(window.location.origin+'/api/get-todays-foods', {
             method: "GET",
             credentials: "same-origin"
         })
         .then(res => res.json().then(data => {
             if (data.msg) {
+                setLoadingFoods(false)
                 setLoggedFoods(data.foods)
             }   
             else {
@@ -146,7 +160,8 @@ export function TrackFoodsPage () {
                         return <div key={index} className="shadow-box food">
                             <img src="/src/img/lemon.png" alt="" className='food-img' />
                             <div className='food-details'>
-                                <span>{sug}</span>
+                                <span>{sug.food_name}</span>
+                                <span>{sug.data_origin}</span>
                             </div>
                             <span className="prim-btn">ADD</span>
                         </div>
@@ -191,6 +206,22 @@ export function TrackFoodsPage () {
         </>
     }
 
+    function detectImage(e) {
+        console.log("Detected image event", e.target.files[0])
+
+        setLoadingFoods(true)
+        const formData = new FormData()
+        formData.append('image', e.target.files[0])
+        fetchImage(formData)
+        .then(data => {
+            if (data.msg) {
+                console.log(data)
+                setLoadingFoods(false)
+                fetchTodaysFoods()
+            }
+        })
+    }
+
     return <>
         <div className="content-container">
             <div className="shadow-box h1">
@@ -210,7 +241,7 @@ export function TrackFoodsPage () {
                             <path d="M13.1045 2.85536L12.1904 5.57143H5.625C2.52246 5.57143 0 8.06987 0 11.1429V33.4286C0 36.5016 2.52246 39 5.625 39H39.375C42.4775 39 45 36.5016 45 33.4286V11.1429C45 8.06987 42.4775 5.57143 39.375 5.57143H32.8096L31.8955 2.85536C31.3242 1.14911 29.7158 0 27.8965 0H17.1035C15.2842 0 13.6758 1.14911 13.1045 2.85536ZM22.5 13.9286C24.7378 13.9286 26.8839 14.8091 28.4662 16.3763C30.0486 17.9436 30.9375 20.0693 30.9375 22.2857C30.9375 24.5022 30.0486 26.6278 28.4662 28.1951C26.8839 29.7624 24.7378 30.6429 22.5 30.6429C20.2622 30.6429 18.1161 29.7624 16.5338 28.1951C14.9514 26.6278 14.0625 24.5022 14.0625 22.2857C14.0625 20.0693 14.9514 17.9436 16.5338 16.3763C18.1161 14.8091 20.2622 13.9286 22.5 13.9286Z" fill="#DA9759"/>
                         </svg>
                     </div>
-                    <input type="file" style={{position: "absolute", top:0, left:0, bottom:0, right:0, opacity: 0}} />
+                    <input onChange={(e) => {detectImage(e)}} type="file" style={{position: "absolute", top:0, left:0, bottom:0, right:0, opacity: 0}} />
                 </label>
                 <div onClick={() => {startRecorder()}} className="track-method-circle">
                     <svg width="21.6" height="31.2" viewBox="0 0 27 39" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -224,9 +255,9 @@ export function TrackFoodsPage () {
                 </div>
             </div>  
             {(loadingFoods) ? <div style={{color: "white"}}>Loading food items</div> : ""}
-            <div className="foods">
+            <div className="foods" style={{marginTop: "2rem"}}>
                 {(loggedFoods) ? loggedFoods.map((foodItem, index) => {
-                    return <div key={index} className="shadow-box food" style={{marginTop: "2rem"}}>
+                    return <div key={index} className="shadow-box food">
                         <img src="/src/img/lemon.png" alt="" className='food-img' />
                         <div className='food-details'>
                             <span>{foodItem.food_name}</span>

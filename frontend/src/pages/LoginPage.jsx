@@ -57,11 +57,17 @@ export function LoginPage() {
     }
 
     return <>
-        <h1>Login to your mismicros</h1>
-        <form onSubmit={handleSubmit}>
-            <input ref={emailInput} placeholder="yourname@something.com" type="text" name="email" />
-            <input ref={pwdInput} placeholder="definitelynot123456" type="password" name="password" />
-            <button type="submit">Login</button>
+    <div className="content-container">
+        <h1>Login to planty micros</h1>
+        <form className='login-form' onSubmit={handleSubmit}>
+            <input className='login-input' ref={emailInput} placeholder="yourname@something.com" type="text" name="email" />
+            <input className='login-input' ref={pwdInput} placeholder="definitelynot123456" type="password" name="password" />
+            <button className='login-btn' type="submit">Login</button>
         </form>
+        <div className="rerouting">
+            <span>You do not have an account yet? <Link to={"/register"}>Create your account now</Link></span>
+            <Link to={"/"}>Resume to homepage</Link>
+        </div>
+    </div>
     </>
 }

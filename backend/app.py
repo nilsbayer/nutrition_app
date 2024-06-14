@@ -26,7 +26,10 @@ from ragas.metrics import (
     answer_correctness,
 )
 import pandas as pd
+import numpy as np
 from bson import ObjectId, BSON
+import torch
+import re
 
 app = Flask(__name__, static_url_path="/")
 CORS(app, origins=['http://localhost:3000'])
@@ -46,16 +49,45 @@ paper_col = db1["paper_embeds"]
 myclient = pymongo.MongoClient(os.environ.get("DB_URI"))
 db = myclient["foods"]
 nutrient_col = db["nutrient_data"]
+means_stds_col = db["means_stds"]
 user_col = db["users"]
 chatbot_logs_col = db["chatbot_logs_normal"]
 user_logs_col = db["user_logs"]
+articles_col = db["articles"]
 
 sbert = SentenceTransformer("all-MiniLM-L6-v2")
 
+# yolo_model = torch.hub.load('ultralytics/yolov5', 'custom', path='best.pt', force_reload=True)
+llm_for_detection = True
+
 logging.basicConfig(level=logging.DEBUG)
+
+yolo_classes = [
+    'dog', 'person', 'cat', 'tv', 'car', 'meatballs', 'marinara sauce', 'tomato soup', 'chicken noodle soup', 'french onion soup', 'chicken breast', 'ribs', 'pulled pork', 'hamburger', 'cavity', 'banana', 'blueberry', 'w', 'raspberry', 'strawberry'
+]
 
 "********************** Create vectors **********************"
 # All numbers saved as micrograms
+
+list_nutrient_names = [
+    "vitamin b-12",
+    "vitamin a",
+    "vitamin b-6",
+    "niacin",
+    "riboflavin (vitamin b-2)",
+    "thiamin (vitamin b-1)",
+    "vitamin c (ascorbic acid)",
+    "sodium",
+    "potassium",
+    "phosphorus",
+    "magnesium",
+    "iron",
+    "calcium",
+    "total_fiber",
+    "vitamin e",
+    "vitamin k",
+    "cholesterol"
+]
 
 who_recommedations_male = {
     "vitamin b-12": 2.4,
@@ -100,9 +132,8 @@ who_recommedations_female = {
 male_recommendation_vector = [value for key, value in who_recommedations_male.items()]
 female_recommendation_vector = [value for key, value in who_recommedations_female.items()]
 
-
-food_names = []
-nutrient_vectors = []
+# food_names = []
+# nutrient_vectors = []
 
 unit_table = {
     "µg": 1.0,
@@ -110,76 +141,76 @@ unit_table = {
     "g": 1000000.0
 }
 
-for food in nutrient_col.find():
-    this_food_dict = {}
-    for i in food.get("nutrients"):
-        if i.get("nutrient") == "Vitamin B-12":
-            this_food_dict.update({"vitamin b-12": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Vitamin A, RAE":
-            this_food_dict.update({"vitamin a": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Vitamin B-6":
-            this_food_dict.update({"vitamin b-6": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Niacin":
-            this_food_dict.update({"niacin": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Riboflavin":
-            this_food_dict.update({"riboflavin (vitamin b-2)": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Thiamin":
-            this_food_dict.update({"thiamin (vitamin b-1)": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Vitamin C, total ascorbic acid":
-            this_food_dict.update({"vitamin c (ascorbic acid)": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Sodium, Na":
-            this_food_dict.update({"sodium": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Potassium, K":
-            this_food_dict.update({"potassium": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Phosphorus, P":
-            this_food_dict.update({"phosphorus": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Magnesium, Mg":
-            this_food_dict.update({"magnesium": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Iron, Fe":
-            this_food_dict.update({"iron": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Calcium, Ca":
-            this_food_dict.update({"calcium": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Fiber, total dietary":
-            this_food_dict.update({"total_fiber": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Fiber, total dietary":
-            this_food_dict.update({"total_fiber": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Vitamin E (alpha-tocopherol)":
-            this_food_dict.update({"vitamin e": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Vitamin K (phylloquinone)":
-            this_food_dict.update({"vitamin k": i.get("amount") * unit_table.get(i.get("unit"))})
-        if i.get("nutrient") == "Cholesterol":
-            this_food_dict.update({"cholesterol": i.get("amount") * unit_table.get(i.get("unit"))})
+# for food in nutrient_col.find():
+#     this_food_dict = {}
+#     for i in food.get("nutrients"):
+#         if i.get("nutrient") == "Vitamin B-12":
+#             this_food_dict.update({"vitamin b-12": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Vitamin A, RAE":
+#             this_food_dict.update({"vitamin a": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Vitamin B-6":
+#             this_food_dict.update({"vitamin b-6": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Niacin":
+#             this_food_dict.update({"niacin": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Riboflavin":
+#             this_food_dict.update({"riboflavin (vitamin b-2)": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Thiamin":
+#             this_food_dict.update({"thiamin (vitamin b-1)": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Vitamin C, total ascorbic acid":
+#             this_food_dict.update({"vitamin c (ascorbic acid)": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Sodium, Na":
+#             this_food_dict.update({"sodium": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Potassium, K":
+#             this_food_dict.update({"potassium": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Phosphorus, P":
+#             this_food_dict.update({"phosphorus": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Magnesium, Mg":
+#             this_food_dict.update({"magnesium": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Iron, Fe":
+#             this_food_dict.update({"iron": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Calcium, Ca":
+#             this_food_dict.update({"calcium": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Fiber, total dietary":
+#             this_food_dict.update({"total_fiber": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Fiber, total dietary":
+#             this_food_dict.update({"total_fiber": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Vitamin E (alpha-tocopherol)":
+#             this_food_dict.update({"vitamin e": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Vitamin K (phylloquinone)":
+#             this_food_dict.update({"vitamin k": i.get("amount") * unit_table.get(i.get("unit"))})
+#         if i.get("nutrient") == "Cholesterol":
+#             this_food_dict.update({"cholesterol": i.get("amount") * unit_table.get(i.get("unit"))})
 
-    food_vector = [
-        this_food_dict.get("vitamin b-12"),
-        this_food_dict.get("vitamin a"),
-        this_food_dict.get("vitamin b-6"),
-        this_food_dict.get("niacin"),
-        this_food_dict.get("riboflavin (vitamin b-2)"),
-        this_food_dict.get("thiamin (vitamin b-1)"),
-        this_food_dict.get("vitamin c (ascorbic acid)", 0.0),
-        this_food_dict.get("sodium"),
-        this_food_dict.get("potassium"),
-        this_food_dict.get("phosphorus"),
-        this_food_dict.get("magnesium"),
-        this_food_dict.get("iron"),
-        this_food_dict.get("calcium"),
-        this_food_dict.get("total_fiber"),
-        this_food_dict.get("vitamin e"),
-        this_food_dict.get("vitamin k"),
-        this_food_dict.get("cholesterol")
-    ]
+#     food_vector = [
+#         this_food_dict.get("vitamin b-12"),
+#         this_food_dict.get("vitamin a"),
+#         this_food_dict.get("vitamin b-6"),
+#         this_food_dict.get("niacin"),
+#         this_food_dict.get("riboflavin (vitamin b-2)"),
+#         this_food_dict.get("thiamin (vitamin b-1)"),
+#         this_food_dict.get("vitamin c (ascorbic acid)", 0.0),
+#         this_food_dict.get("sodium"),
+#         this_food_dict.get("potassium"),
+#         this_food_dict.get("phosphorus"),
+#         this_food_dict.get("magnesium"),
+#         this_food_dict.get("iron"),
+#         this_food_dict.get("calcium"),
+#         this_food_dict.get("total_fiber"),
+#         this_food_dict.get("vitamin e"),
+#         this_food_dict.get("vitamin k"),
+#         this_food_dict.get("cholesterol")
+#     ]
 
-    food_names.append(food.get("food"))
-    nutrient_vectors.append(food_vector)
+#     food_names.append(food.get("food"))
+#     nutrient_vectors.append(food_vector)
 
-vector_length_sum = 0
-for i in nutrient_vectors:
-    vector_length_sum += len(i)
+# vector_length_sum = 0
+# for i in nutrient_vectors:
+#     vector_length_sum += len(i)
 
-app.logger.info(f"RECOMMENDATION LENGTH {str(len(female_recommendation_vector))}")
-app.logger.info(f"AVG FOOD VECTOR LENGTH {str(vector_length_sum / len(nutrient_vectors))}")
-app.logger.info(util.cos_sim(female_recommendation_vector, nutrient_vectors))
+# app.logger.info(f"RECOMMENDATION LENGTH {str(len(female_recommendation_vector))}")
+# app.logger.info(f"AVG FOOD VECTOR LENGTH {str(vector_length_sum / len(nutrient_vectors))}")
+# app.logger.info(util.cos_sim(female_recommendation_vector, nutrient_vectors))
 
 
 "********************** Authentication function **********************"
@@ -204,7 +235,7 @@ def authenticate_cookies(request):
         return [False, "_"]
 
 
-def run_query_and_evaluat_web_app(query):
+def run_query_and_evaluat_web_app(query, db_res):
     if not query: return "Error, please enter query and ground_truth"
     # Embed query
     print("Embedding query")
@@ -234,20 +265,39 @@ def run_query_and_evaluat_web_app(query):
 
     User question: {query}
     """
-    llm_res = openai_client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {
+
+    app.logger.info(f"************* CONVERSATION: {str(db_res)}")
+    if db_res and db_res.get("conversation"):
+        messages = [{"role": chat_item.get("role"), "content": chat_item.get("text")} for chat_item in db_res.get("conversation")]
+        messages.append({
             "role": "user",
             "content": llm_query
-            }
-        ],
-        temperature=0,
-        max_tokens=2000,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
+        })
+
+        llm_res = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0,
+            max_tokens=2000,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
+    else:
+        llm_res = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                "role": "user",
+                "content": llm_query
+                }
+            ],
+            temperature=0,
+            max_tokens=2000,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
 
     print("RAGAS evaluation started")
     # Prepare data format for RAGAS
@@ -261,6 +311,13 @@ def run_query_and_evaluat_web_app(query):
     )
     return llm_res.choices[0].message.content, ragas_result.get("faithfulness")
 
+def encode_image(image_path):
+  with open(image_path, "rb") as image_file:
+    return base64.b64encode(image_file.read()).decode('utf-8')
+
+def get_openai_embedding(text, model="text-embedding-3-small"):
+   text = text.replace("\n", " ")
+   return openai_client.embeddings.create(input = [text], model=model).data[0].embedding
 
 "***************************** Routes *****************************"
 
@@ -359,22 +416,62 @@ def login():
 #         return jsonify({"msg": "Algo salió mal."})
 #     return jsonify({"msg": "Algo salió mal."})
 
-@app.route("/api/get-food-recommendations", methods=["POST"])
+@app.route("/api/get-food-recommendations", methods=["GET"])
 def get_food_recommendations():
     status, user = authenticate_cookies(request)
     if status:
-        if request.method == "POST":
-            user_vector = request.get_json().get("user_vector")
-            user_vector = [float(value) for key, value in user_vector.items()]
+        if request.method == "GET":
+            # user_vector = request.get_json().get("user_vector")
+            # user_vector = [float(value) for key, value in user_vector.items()]
 
-            scores = util.cos_sim(user_vector, nutrient_vectors).tolist()[0]
-            sorted_indexes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-            top_five_indexes = sorted_indexes[:5]
+            # scores = util.cos_sim(user_vector, nutrient_vectors).tolist()[0]
+            # sorted_indexes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+            # top_five_indexes = sorted_indexes[:5]
+            
+            # Get todays, current nutrient vector of user from user_logs_col
+            todays_entry = user_logs_col.find_one({
+                "date": str(datetime.today())[:10],
+                "user_id": user.get("_id")
+            })
+
+            if todays_entry and len(todays_entry.get("logged_foods")) > 0:
+                if user.get("sex") == "female":
+                    user_vector = [max([0.0, (a - b)]) for a, b in zip(female_recommendation_vector, todays_entry.get("nutrient_vector"))]
+                else:
+                    user_vector = [max([0.0, (a - b)]) for a, b in zip(male_recommendation_vector, todays_entry.get("nutrient_vector"))]
+                
+            else:
+                # No foods consumed today 
+                if user.get("sex") == "female":
+                    user_vector = female_recommendation_vector
+                else:
+                    user_vector = male_recommendation_vector
+
+            if len(user_vector) != 17:
+                return jsonify({"msg": False, "vector": user_vector})
+            
+            # Standardization of user vector
+            res = means_stds_col.find_one()
+            std_user_vector = np.nan_to_num(((np.array(user_vector) - np.array(res.get("means"))) / np.array(res.get("stds"))), nan=0).tolist()
+
+            # Make 
+            pipeline = [
+                {
+                    '$vectorSearch': {
+                        'index': 'food_recommendation_search',
+                        'path': 'std_nutrient_vector', 
+                        'queryVector': std_user_vector,
+                        'numCandidates': 200, 
+                        'limit': 10
+                    }
+                }
+            ]
+            results = [i for i in nutrient_col.aggregate(pipeline)]
 
             recommendations_to_send = []
-            for i in top_five_indexes:
+            for i in results:
                 recommendations_to_send.append({
-                    "name": food_names[i],
+                    "name": i.get("food"),
                     "richIn": [
                         "+ Vitamin A", "+ Vitamin C", "+ Potassium"
                     ]
@@ -382,7 +479,7 @@ def get_food_recommendations():
                 
             return jsonify({"msg": True, "recommendations": recommendations_to_send})
 
-    return jsonify({"msg": False})
+    return jsonify({"msg": False, "details": "auth"})
 
 @app.route("/api/speech-to-foods", methods=["POST"])
 def speech_to_foods():
@@ -478,6 +575,7 @@ def speech_to_foods():
                         "food_name": db_food[0].get("food"),
                         "food_id": db_food[0].get("_id"),
                         "amount_in_grams": float(llm_food.get("amount_in_grams")),
+                        "food_origin": db_food[0].get("data_origin"),
                         "dish": "lunch"
                     })
 
@@ -526,8 +624,13 @@ def process_message():
     status, user = authenticate_cookies(request)
     if status:
         if len(request.get_json().get('userMessage')) > 0 and request.get_json().get('userMessage') != None and len(request.get_json().get('chatSession')) > 0 and request.get_json().get('chatSession') != None:
+            res = chatbot_logs_col.find_one({
+                "chat_session": request.get_json().get('chatSession'),
+                "user_token": user.get("token")
+            })
+            
             # Run RAG process
-            answer, faithfulness = run_query_and_evaluat_web_app(request.get_json().get('userMessage'))
+            answer, faithfulness = run_query_and_evaluat_web_app(request.get_json().get('userMessage'), res)
 
             # Check for existing conversation doc in chatbot_logs_col
             res = chatbot_logs_col.find_one({
@@ -554,7 +657,7 @@ def process_message():
                 }, {
                     "$push": {
                         "conversation": {
-                            "role": "agent",
+                            "role": "system",
                             "text": answer,
                             "faithfulness": faithfulness
                         }
@@ -567,7 +670,7 @@ def process_message():
                         "text": request.get_json().get('userMessage')
                     },
                     {
-                        "role": "agent",
+                        "role": "system",
                         "text": answer,
                         "faithfulness": faithfulness 
                     }
@@ -584,7 +687,7 @@ def process_message():
                             "text": request.get_json().get('userMessage')
                         },
                         {
-                            "role": "agent",
+                            "role": "system",
                             "text": answer,
                             "faithfulness": faithfulness 
                         }
@@ -597,7 +700,7 @@ def process_message():
                         "text": request.get_json().get('userMessage')
                     },
                     {
-                        "role": "agent",
+                        "role": "system",
                         "text": answer,
                         "faithfulness": faithfulness 
                     }
@@ -625,7 +728,7 @@ def search_foods():
                     }
                 }
             ]
-            results = [i.get("food") for i in nutrient_col.aggregate(pipeline)]
+            results = [{"food_name": i.get("food"), "data_origin": i.get("data_origin")} for i in nutrient_col.aggregate(pipeline)]
 
             return jsonify({"msg": True, "query_results": results})
 
@@ -648,3 +751,162 @@ def get_todays_foods():
         return jsonify({"msg": True, "foods": db_foods.get("logged_foods")})
     
     return jsonify({"msg": False, "details": "end"})
+
+@app.route("/api/get-nutrient-coverage", methods=["GET"])
+def get_nutrient_coverage():
+    status, user = authenticate_cookies(request)
+    if status:
+        stats = {
+            "macroNutrients": [
+                {
+                    "name": "Protein",
+                    "percentage": 50
+                },
+                {
+                    "name": "Fats",
+                    "percentage": 50
+                },
+                {
+                    "name": "Carbohydrates",
+                    "percentage": 50
+                }
+            ],
+            "remainingCalories": 1100
+        }
+        res = user_logs_col.find_one({
+            "date": str(datetime.today())[:10],
+            "user_id": user.get("_id")
+        })
+        if user.get("sex") == "female":
+            recommended_vector = female_recommendation_vector
+        else:
+            recommended_vector = male_recommendation_vector
+
+        if res and len(res.get("logged_foods")) > 0:
+            micronutrients = []
+            for idx, micronutrient in enumerate(list_nutrient_names):
+                micronutrients.append({
+                    "name": micronutrient,
+                    "percentage": min([int((res.get("nutrient_vector")[idx] / recommended_vector[idx]) * 100), 100])
+                })
+            stats.update({"microNutrients": micronutrients})
+
+            return jsonify({"msg": True, "nutrient_stats": stats})        
+        else:
+            # Has not eaten anything today, so all 0%
+            micronutrients = []
+            for idx, micronutrient in enumerate(list_nutrient_names):
+                micronutrients.append({
+                    "name": micronutrient,
+                    "percentage": 0
+                })
+                stats.update({"microNutrients": micronutrients})
+
+            return jsonify({"msg": True, "nutrient_stats": stats})        
+    
+    return jsonify({"msg": False})
+
+@app.route("/api/detect-food-image", methods=["POST"])
+def detect_foods_in_image():
+    status, user = authenticate_cookies(request)
+    if status:
+        uploaded_img = request.files.get("image")
+        if uploaded_img.filename == '':
+            return jsonify({"msg": False, "details": "No file"})
+        
+        uploaded_img.save(os.path.join("data", uploaded_img.filename))
+        
+        if not llm_for_detection:
+            try:
+                results = yolo_model(os.path.join("data", uploaded_img.filename))
+            except:
+                return jsonify({"msg": False, "details": "yolo model"})
+
+            recognized_foods = []
+            for result in results.xyxy[0].tolist():
+                if result[4] > 0.5:
+                    recognized_foods.append(yolo_classes[int(result[5])])
+
+            os.remove(os.path.join("data", uploaded_img.filename))
+
+            return jsonify({"msg": True, "detected": recognized_foods, "llm":False})
+        else:
+            response = openai_client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Please detect the food items in the attached image as well as an approximate amount visible measured in grams. Split dishes into the single ingredients. For example, if the user says 'hamburger', please split it into probable ingredients, like 'burger bun', 'beef patty', 'lettuce' and 'onions'. Please also guess any invisible ingredients, like e.g. olive oil or sugar. ONLY return a JSON list where each item is an object with the keys 'food_name' and 'amount_in_grams."},
+                        {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{encode_image(os.path.join('data', uploaded_img.filename))}",
+                            "detail": "low"
+                        },
+                        },
+                    ],
+                    }
+                ],
+                max_tokens=300,
+                temperature=0
+            )
+
+            os.remove(os.path.join("data", uploaded_img.filename))
+
+            text = response.choices[0].message.content
+            text = text.replace("\n", "")
+
+            # Regular expression to match everything between the first '[' and the last ']'
+            pattern = r'\[.*\]'
+
+            # Search for the pattern in the text
+            match = re.search(pattern, text)
+
+            # Extract and print the result if a match is found
+            if match:
+                result = match.group(0)
+                json_results = json.loads(result)
+            else:
+                return jsonify({"msg": False, "details": "Data formatting issue"})
+
+            return jsonify({"msg": True, "detected": json_results, "llm":True})
+
+    return jsonify({"msg": False})
+
+@app.route("/api/get-article-recommendations", methods=["GET"])
+def get_articles():
+    status, user = authenticate_cookies(request)
+    if status:
+        res = chatbot_logs_col.find({"timestamp": {"$lt": datetime.now()}, "user_token": user.get("token")})
+
+        if res:
+            conversation_docs = [i.get("conversation") for i in res]
+            
+            all_queries = []
+            for doc in conversation_docs:
+                for conversation_item in doc:
+                    if conversation_item.get("role") == "user":
+                        all_queries.append(conversation_item.get("text"))
+
+            summed_queries = " ".join(all_queries)
+
+            pipeline = [
+                {
+                    '$vectorSearch': {
+                        'index': 'article_search',
+                        'path': 'embeddedings', 
+                        'queryVector': get_openai_embedding(summed_queries), 
+                        'numCandidates': 1536, 
+                        'limit': 5
+                    }
+                }
+            ]
+            result = [i for i in articles_col.aggregate(pipeline)]
+
+            return jsonify({"msg": True, "articles": result})
+        
+        else:
+            return jsonify({"msg": False, "details": "User in DB not found"})
+
+    return jsonify({"msg": False})
