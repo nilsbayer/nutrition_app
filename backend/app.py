@@ -927,3 +927,4 @@ def get_article():
                 return jsonify({"msg": True, "article": article})
 
     return jsonify({"msg": False})
+

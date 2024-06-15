@@ -1,10 +1,11 @@
 import {useAuthUser} from 'react-auth-kit'
 import { Link } from 'react-router-dom';
 import React, { useDeferredValue, useEffect, useState, useTransition } from 'react'
-import { user_vector } from '../App'
+import { overlayContent, user_vector } from '../App'
 import { NavBar } from '../components/NavBar';
 import { AudioRecorder, useAudioRecorder } from 'react-audio-voice-recorder';
 import { notfiyUser } from '../Notifcation';
+import { Overlay } from '../components/Overlay';
 
 export function TrackFoodsPage () {
     const auth = useAuthUser()
@@ -133,6 +134,17 @@ export function TrackFoodsPage () {
         return data;
     }
 
+    function showOverlay(type) {
+        console.log("Overlay opened", type)
+        if (type === "usda") {
+            console.log("This actually worked")
+            overlayContent.value = {
+                title: "What is the data origin 'USDA'",
+                text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Ratione architecto quos alias dignissimos, quam hic asperiores, atque rem delectus ut minima ea! Omnis animi ad deserunt mollitia perspiciatis debitis vel."
+            }
+        }
+    }
+
     if (typingChosen) {
         return <>
         <div className="content-container">
@@ -158,7 +170,7 @@ export function TrackFoodsPage () {
                 <div className="foods">
                     {(foodSuggestions) ? foodSuggestions.map((sug, index) => {
                         return <div key={index} className="shadow-box food">
-                                <span className='data-origin'>{foodItem.data_origin}</span>
+                            <span onClick={() => { showOverlay("usda") }} className='data-origin'>{sug.data_origin}</span>
                             <img src="/src/img/lemon.png" alt="" className='food-img' />
                             <div className='food-details'>
                                 <span>{sug.food_name}</span>
@@ -170,6 +182,7 @@ export function TrackFoodsPage () {
             </div>
             <NavBar />
         </div>
+        {(overlayContent.value) ? <Overlay /> : ""}
         </>
     }
 
@@ -222,6 +235,7 @@ export function TrackFoodsPage () {
         })
     }
 
+
     return <>
         <div className="content-container">
             <div className="shadow-box h1">
@@ -258,7 +272,7 @@ export function TrackFoodsPage () {
             <div className="foods" style={{marginTop: "2rem"}}>
                 {(loggedFoods) ? loggedFoods.map((foodItem, index) => {
                     return <div key={index} className="shadow-box food">
-                        <span className='data-origin'>{foodItem.food_origin}</span>
+                        <span onClick={() => { showOverlay("usda") }} className='data-origin'>{foodItem.food_origin}</span>
                         <img src="/src/img/lemon.png" alt="" className='food-img' />
                         <div className='food-details'>
                             <span>{foodItem.food_name}</span>
@@ -292,5 +306,6 @@ export function TrackFoodsPage () {
             </div>
             <NavBar />
         </div>
+        {(overlayContent.value) ? <Overlay /> : ""}
     </>
 }

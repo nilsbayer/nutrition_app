@@ -3,6 +3,8 @@ import { NavBar } from '../components/NavBar';
 import { v4 as uuidv4 } from 'uuid';
 import { notfiyUser } from '../Notifcation';
 import {useAuthUser} from 'react-auth-kit'
+import { overlayContent } from '../App';
+import { Overlay } from '../components/Overlay';
 
 
 export function ChatPage() {
@@ -97,7 +99,7 @@ export function ChatPage() {
                     else if (message.role === "system") {
                         return <div key={index} className="message app-message">
                             <span>{message.text}</span>
-                            {(message.faithfulness) ? <div className="faithfulness-container">{parseInt(message.faithfulness*100)}% based on academic papers</div> : ""}
+                            {(message.faithfulness) ? <div onClick={() => { overlayContent.value = {title: "Definition of 'Based on academic literature'", text: "To make our chatbot system truthful and stating facts based on research in nutrition science, we gave access to academic papers to the chatbot. The percentage you can see will tell you how much of the answer is based on these manually picked academic papers."} }} className="faithfulness-container">{parseInt(message.faithfulness*100)}% based on academic papers</div> : ""}
                         </div>
                     }
                 })}
@@ -105,5 +107,6 @@ export function ChatPage() {
         </div>
         {(textFieldShown) ? displayTextField() : ""}
         <NavBar />
+        {(overlayContent.value) ? <Overlay /> : ""}
     </>
 }

@@ -11,7 +11,8 @@ import { ChatPage } from './pages/ChatPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { ArticlePage } from './pages/ArticlePage'
 
-export const currentPopUp = signal(null)
+// export const currentPopUp = signal(null)
+export const overlayContent = signal(null)
 
 export const user_vector = signal({
     "vitamin b-12": 2.4,
