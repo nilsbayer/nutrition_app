@@ -158,10 +158,10 @@ export function TrackFoodsPage () {
                 <div className="foods">
                     {(foodSuggestions) ? foodSuggestions.map((sug, index) => {
                         return <div key={index} className="shadow-box food">
+                                <span className='data-origin'>{foodItem.data_origin}</span>
                             <img src="/src/img/lemon.png" alt="" className='food-img' />
                             <div className='food-details'>
                                 <span>{sug.food_name}</span>
-                                <span>{sug.data_origin}</span>
                             </div>
                             <span className="prim-btn">ADD</span>
                         </div>
@@ -258,6 +258,7 @@ export function TrackFoodsPage () {
             <div className="foods" style={{marginTop: "2rem"}}>
                 {(loggedFoods) ? loggedFoods.map((foodItem, index) => {
                     return <div key={index} className="shadow-box food">
+                        <span className='data-origin'>{foodItem.food_origin}</span>
                         <img src="/src/img/lemon.png" alt="" className='food-img' />
                         <div className='food-details'>
                             <span>{foodItem.food_name}</span>

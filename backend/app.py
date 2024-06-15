@@ -903,10 +903,27 @@ def get_articles():
                 }
             ]
             result = [i for i in articles_col.aggregate(pipeline)]
+            for i in result:
+                i.update({"_id": str(i.get("_id"))})
 
             return jsonify({"msg": True, "articles": result})
         
         else:
             return jsonify({"msg": False, "details": "User in DB not found"})
+
+    return jsonify({"msg": False})
+
+@app.route("/api/get-article", methods=["GET"])
+def get_article():
+    status, user = authenticate_cookies(request)
+    if status:
+        if request.args.get("t"):
+            article = articles_col.find_one({
+                "token": str(request.args.get("t"))
+            })
+            article.update({"_id": str(article.get("_id"))})
+
+            if article:
+                return jsonify({"msg": True, "article": article})
 
     return jsonify({"msg": False})

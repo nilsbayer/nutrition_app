@@ -9,6 +9,7 @@ import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ChatPage } from './pages/ChatPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { ArticlePage } from './pages/ArticlePage'
 
 export const currentPopUp = signal(null)
 
@@ -108,6 +109,11 @@ export function App() {
             <Route path="/settings" element={
                 <RequireAuth loginPath={'/login'}>
                     <SettingsPage />
+                </RequireAuth>
+            } />
+            <Route path="/article/:articleToken" element={
+                <RequireAuth loginPath={'/login'}>
+                    <ArticlePage />
                 </RequireAuth>
             } />
             {/* <Route path="/" element={<Dashboard />} /> */}
