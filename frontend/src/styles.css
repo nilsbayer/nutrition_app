@@ -228,6 +228,7 @@ h3, .emoji-text span, h4 {
     gap: 1rem;
     padding: 2dvh 2dvw;
     margin: 0;
+    position: relative;
 }
 
 .food-details {
@@ -512,3 +513,54 @@ input[type='text'], input[type='password'] {
     padding: 2rem 1rem;
 }
 
+.settings-page {
+    color: white;
+}
+
+.settings-page div {
+    margin-bottom: 1.5rem;
+}
+
+.food-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+input[type="number"] {
+    padding: .5rem 1rem;
+    outline: none;
+    border: none;
+    background-color: lightgrey;
+    border-radius: 10px;
+}
+
+.remove-btn {
+    background-color: white;
+    border-radius: 50%;
+    box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.05);
+    width: 1.5rem;
+    height: 1.5rem;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transform: translate(50%, -50%) rotate(45deg);
+}
+
+.remove-btn:hover {
+    background-color: lightgray;
+}
+
+.line{
+    width: 50%;
+    height: 10%;
+    background-color: grey;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.vertical {
+    transform: translate(-50%, -50%) rotate(90deg);
+}

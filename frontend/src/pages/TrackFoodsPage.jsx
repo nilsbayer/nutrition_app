@@ -6,6 +6,10 @@ import { NavBar } from '../components/NavBar';
 import { AudioRecorder, useAudioRecorder } from 'react-audio-voice-recorder';
 import { notfiyUser } from '../Notifcation';
 import { Overlay } from '../components/Overlay';
+import { signal } from '@preact/signals-react';
+import { FoodChoice } from '../components/FoodChoice';
+
+export const foodChosen = signal(null)
 
 export function TrackFoodsPage () {
     const auth = useAuthUser()
@@ -24,7 +28,7 @@ export function TrackFoodsPage () {
     // Get Recently Logged foods from database
     useEffect(() => {
         fetchTodaysFoods()
-    }, [])
+    }, [typingChosen])
 
     const {
         startRecording,
@@ -165,7 +169,7 @@ export function TrackFoodsPage () {
             </div>
             <div className="typing-container">
                 <div className="shadow-box h1 input-shadow-box">
-                    <input value={foodSearch} onChange={(e) => {setFoodSearch(e.target.value)}} type="text" placeholder='Enter a food name ...' />
+                    <input value={foodSearch} onChange={(e) => {setFoodSearch(e.target.value)}} onLoad={(e) => { e.target.focus() }} type="text" placeholder='Enter a food name ...' />
                 </div>
                 <div className="foods">
                     {(foodSuggestions) ? foodSuggestions.map((sug, index) => {
@@ -175,7 +179,7 @@ export function TrackFoodsPage () {
                             <div className='food-details'>
                                 <span>{sug.food_name}</span>
                             </div>
-                            <span className="prim-btn">ADD</span>
+                            <span onClick={() => { foodChosen.value = {name: sug.food_name, dataOrigin: sug.data_origin} }} className="prim-btn">ADD</span>
                         </div>
                     }) : ""}
                 </div>
@@ -183,6 +187,7 @@ export function TrackFoodsPage () {
             <NavBar />
         </div>
         {(overlayContent.value) ? <Overlay /> : ""}
+        {(foodChosen.value) ? <FoodChoice /> : ""}
         </>
     }
 
@@ -235,6 +240,34 @@ export function TrackFoodsPage () {
         })
     }
 
+    function removeLoggedFood(foodName, amount) {
+        fetchRemoval({
+            name: foodName,
+            amount: amount
+        })
+        .then(data => {
+            if (data.msg) {
+                notfiyUser(foodName+" was successfully removed from the logs")
+                fetchTodaysFoods()
+            }
+            else {
+                notfiyUser("Item was unable to be removed.")
+            }
+        })
+    }
+
+    async function fetchRemoval(inputData) {
+        const response = await fetch(window.location.origin+'/api/remove-single-food', {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(inputData)
+        });
+        const data = await response.json();
+        return data;
+    }
 
     return <>
         <div className="content-container">
@@ -279,7 +312,10 @@ export function TrackFoodsPage () {
                             <span>{foodItem.amount_in_grams} g</span>
                         </div>
                         <div className="cancel-btn"></div>
-                        {/* <span className="prim-btn">ADD</span> */}
+                        <div onClick={(e) => { removeLoggedFood(foodItem.food_name, foodItem.amount_in_grams) }} className="remove-btn">
+                            <div className="line"></div>
+                            <div className="line vertical"></div>
+                        </div>
                     </div>
                 }) : "Fetching logged foods"}
             </div>
@@ -307,5 +343,6 @@ export function TrackFoodsPage () {
             <NavBar />
         </div>
         {(overlayContent.value) ? <Overlay /> : ""}
+        {(foodChosen.value) ? <FoodChoice /> : ""}
     </>
 }

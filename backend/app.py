@@ -30,6 +30,7 @@ import numpy as np
 from bson import ObjectId, BSON
 import torch
 import re
+import statistics
 
 app = Flask(__name__, static_url_path="/")
 CORS(app, origins=['http://localhost:3000'])
@@ -581,7 +582,8 @@ def speech_to_foods():
 
                 # Check for existing db entry
                 res = user_logs_col.find_one({
-                    "date": str(datetime.today())[:10]
+                    "date": str(datetime.today())[:10],
+                    "user_id": user.get("_id")
                 })
                 if res:
                     # Sum up the newly created nutrient vector and the pre-existing one
@@ -757,20 +759,6 @@ def get_nutrient_coverage():
     status, user = authenticate_cookies(request)
     if status:
         stats = {
-            "macroNutrients": [
-                {
-                    "name": "Protein",
-                    "percentage": 50
-                },
-                {
-                    "name": "Fats",
-                    "percentage": 50
-                },
-                {
-                    "name": "Carbohydrates",
-                    "percentage": 50
-                }
-            ],
             "remainingCalories": 1100
         }
         res = user_logs_col.find_one({
@@ -784,23 +772,93 @@ def get_nutrient_coverage():
 
         if res and len(res.get("logged_foods")) > 0:
             micronutrients = []
+            macronutrients = []
+            totalProgress = []
             for idx, micronutrient in enumerate(list_nutrient_names):
                 micronutrients.append({
                     "name": micronutrient,
                     "percentage": min([int((res.get("nutrient_vector")[idx] / recommended_vector[idx]) * 100), 100])
                 })
+                totalProgress.append(min([int((res.get("nutrient_vector")[idx] / recommended_vector[idx]) * 100), 100]))
             stats.update({"microNutrients": micronutrients})
+            stats.update({
+                "totalProgress": int(statistics.mean(totalProgress))
+            })
+            
+            macros = {
+                "Carbohydrates": 0.0,
+                "Fats": 0.0,
+                "Protein": 0.0
+            }
+
+            for logged_food in res.get("logged_foods", []):
+                fat = 0.0
+                carbs = 0.0
+                protein = 0.0
+                
+                # Get the macro amount per 100g 
+                db_entry = nutrient_col.find_one({
+                    "_id": ObjectId(logged_food.get("food_id"))
+                })
+                
+                for nutrient in db_entry.get("nutrients"):
+                    if nutrient.get("nutrient") == "Total lipid (fat)":
+                        fat = nutrient.get("amount", 0.0)
+                    if nutrient.get("nutrient") == "Carbohydrate, by difference":
+                        carbs = nutrient.get("amount", 0.0)
+                    if nutrient.get("nutrient") == "Protein":
+                        protein = nutrient.get("amount", 0.0)
+
+                # Multiply the amount by gram factor
+                gram_factor = float(logged_food.get("amount_in_grams")) / 100.0
+                fat = fat * gram_factor
+                carbs = carbs * gram_factor
+                protein = protein * gram_factor
+
+                # Update macros dict
+                macros.update({
+                    "Carbohydrates": macros.get("Carbohydrates") + carbs,
+                    "Fats": macros.get("Fats") + fat,
+                    "Protein": macros.get("Protein") + protein
+                })
+
+            stats.update({
+                "macroNutrients": [
+                    {
+                        "name": "Protein",
+                        "percentage": int(macros.get("Protein"))
+                    },
+                    {
+                        "name": "Fats",
+                        "percentage": int(macros.get("Fats"))
+                    },
+                    {
+                        "name": "Carbohydrates",
+                        "percentage": int(macros.get("Carbohydrates"))
+                    }
+                ]
+            })
 
             return jsonify({"msg": True, "nutrient_stats": stats})        
         else:
             # Has not eaten anything today, so all 0%
             micronutrients = []
+            macronutrients = []
             for idx, micronutrient in enumerate(list_nutrient_names):
                 micronutrients.append({
                     "name": micronutrient,
                     "percentage": 0
                 })
-                stats.update({"microNutrients": micronutrients})
+            stats.update({"microNutrients": micronutrients})
+            for macro in ["Carbohydrates", "Fats", "Protein"]:
+                macronutrients.append({
+                    "name": macro,
+                    "percentage": 0
+                })  
+            stats.update({"macroNutrients": macronutrients})
+            stats.update({
+                "totalProgress": 0
+            })
 
             return jsonify({"msg": True, "nutrient_stats": stats})        
     
@@ -925,6 +983,142 @@ def get_article():
 
             if article:
                 return jsonify({"msg": True, "article": article})
+
+    return jsonify({"msg": False})
+
+@app.route("/api/get-user-data", methods=["GET"])
+def get_user_data():
+    status, user = authenticate_cookies(request)
+    if status:
+        user.update({"_id": str(user.get("_id"))})
+        user.update({"account_created": user.get("creation_date").strftime("%d.%m.%Y")})
+        return jsonify({"msg": True, "user_data": user})
+        
+    return jsonify({"msg": False})
+
+@app.route("/api/log-single-food", methods=["POST"])
+def log_single_food():
+    status, user = authenticate_cookies(request)
+    if status:
+        if request.get_json().get("foodName") and request.get_json().get("amount"):
+            food_from_db = nutrient_col.find_one({
+                "food": str(request.get_json().get("foodName"))
+            })
+            if food_from_db:
+                # Create food element for log entry
+                food_to_be_logged = {
+                    "food_name": food_from_db.get("food"),
+                    "food_id": food_from_db.get("_id"),
+                    "amount_in_grams": float(request.get_json().get("amount")),
+                    "food_origin": food_from_db.get("data_origin"),
+                    "dish": "lunch"
+                }
+
+                # Initiate zero vector
+                starting_nutrient_vector = [float(0) for _ in range(17)]
+
+                # Get the factor based on 1.0 being 100g
+                grams_factor = float(food_to_be_logged.get("amount_in_grams")) / 100.0
+
+                # calculate the nutrient amounts in the nutrient vector
+                this_foods_nutrient_vector = [i*grams_factor for i in food_from_db.get("nutrient_vector")] 
+
+                # Add this foods nutrient vector to the starting/changing vector
+                starting_nutrient_vector = [a + b for a, b in zip(this_foods_nutrient_vector, starting_nutrient_vector)]
+
+                # Check for existing db entry
+                res = user_logs_col.find_one({
+                    "date": str(datetime.today())[:10],
+                    "user_id": user.get("_id")
+                })
+                if res:
+                    # Sum up the newly created nutrient vector and the pre-existing one
+                    new_nutrient_vector = [a + b for a, b in zip(res.get("nutrient_vector"), starting_nutrient_vector)]
+
+                    # Update database with newly tracked foods for the day
+                    user_logs_col.update_one({
+                        "date": str(datetime.today())[:10],
+                        "user_id": user.get("_id")
+                    }, {
+                        "$push": {
+                            "logged_foods": food_to_be_logged
+                        },
+                        "$set": {
+                            "nutrient_vector": new_nutrient_vector
+                        }
+                    })
+                else:
+                    # Create first doc for that day
+                    user_logs_col.insert_one({
+                        "date": str(datetime.today())[:10],
+                        "user_id": user.get("_id"),
+                        "logged_foods": [food_to_be_logged],
+                        "nutrient_vector": starting_nutrient_vector
+                    })
+
+                return jsonify({"msg": True})
+
+    return jsonify({"msg": False})
+
+@app.route("/api/remove-single-food", methods=["POST"])
+def remove_single_food():
+    status, user = authenticate_cookies(request)
+    if status:
+        if request.get_json().get("name") and request.get_json().get("amount"):
+            food_from_db = nutrient_col.find_one({
+                "food": str(request.get_json().get("name"))
+            })
+            if food_from_db:
+                food_to_be_logged = {
+                    "food_name": food_from_db.get("food"),
+                    "food_id": food_from_db.get("_id"),
+                    "amount_in_grams": float(request.get_json().get("amount")),
+                    "food_origin": food_from_db.get("data_origin"),
+                    "dish": "lunch"
+                }
+
+                log_entry = user_logs_col.find_one({
+                    "date": str(datetime.today())[:10],
+                    "user_id": user.get("_id"),
+                    "logged_foods": {
+                        "$elemMatch" : food_to_be_logged
+                    }
+                })
+                if log_entry:
+                    # Initiate zero vector
+                    starting_nutrient_vector = [float(0) for _ in range(17)]
+
+                    # Get the factor based on 1.0 being 100g
+                    grams_factor = float(food_to_be_logged.get("amount_in_grams")) / 100.0
+
+                    # calculate the nutrient amounts in the nutrient vector
+                    this_foods_nutrient_vector = [i*grams_factor for i in food_from_db.get("nutrient_vector")] 
+
+                    # Add this foods nutrient vector to the starting/changing vector
+                    starting_nutrient_vector = [a + b for a, b in zip(this_foods_nutrient_vector, starting_nutrient_vector)]
+
+                    # Sum up the newly created nutrient vector and the pre-existing one
+                    new_nutrient_vector = [a - b for a, b in zip(log_entry.get("nutrient_vector"), starting_nutrient_vector)]
+
+                    # Update database with newly tracked foods for the day
+                    try:
+                        user_logs_col.update_one({
+                            "date": str(datetime.today())[:10],
+                            "user_id": user.get("_id")
+                        }, {
+                            "$pull": {
+                                "logged_foods": food_to_be_logged
+                            },
+                            "$set": {
+                                "nutrient_vector": new_nutrient_vector
+                            }
+                        })
+                        return jsonify({"msg": True})
+                    
+                    except:
+                        return jsonify({"msg": False, "details": "database"})
+                else:
+                    return jsonify({"msg": False, "details": "Log not found"})
 
     return jsonify({"msg": False})
 

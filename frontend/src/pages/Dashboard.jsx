@@ -202,9 +202,9 @@ export function Dashboard () {
                     </div>
                     <div className="progress-bar-container">
                         <div className="progressbar">
-                            <div className="progress" style={{width: "20%"}}></div>
+                            <div className="progress" style={{width: `${nutrientData.totalProgress}%`}}></div>
                         </div>
-                        <p className="progress-info">65% of recommended amounts consumed</p>
+                        <p className="progress-info">{nutrientData.totalProgress}% of recommended amounts consumed</p>
                     </div>
                     <h4>Micronutrient Overview</h4>
                     <div className="nutrient-overview">
