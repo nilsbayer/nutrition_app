@@ -226,7 +226,7 @@ def authenticate_cookies(request):
             return [False, "_"]
         
         user = user_col.find_one({ "email": user_email })
-        app.logger.info(user)
+        # app.logger.info(user)
         if user != None:
             return [True, user]
         else:
@@ -319,6 +319,15 @@ def encode_image(image_path):
 def get_openai_embedding(text, model="text-embedding-3-small"):
    text = text.replace("\n", " ")
    return openai_client.embeddings.create(input = [text], model=model).data[0].embedding
+
+def harris_benedict_formula(sex, weight, height, age, physical_activity):
+    if sex == "male":
+        bmr = 66.0 + (13.7 * float(weight)) + (5.0 * float(height)) - (6.8 * float(age))
+    elif sex == "female":
+        bmr = 655.0 + (9.6 * float(weight)) + (1.8 * float(height)) - (4.7 * float(age))
+    final_cal = bmr * physical_activity
+
+    return final_cal
 
 "***************************** Routes *****************************"
 
@@ -730,7 +739,7 @@ def search_foods():
                     }
                 }
             ]
-            results = [{"food_name": i.get("food"), "data_origin": i.get("data_origin")} for i in nutrient_col.aggregate(pipeline)]
+            results = [{"food_name": i.get("food"), "data_origin": i.get("data_origin"), "data_url": i.get("scraped_url")} for i in nutrient_col.aggregate(pipeline)]
 
             return jsonify({"msg": True, "query_results": results})
 
@@ -822,19 +831,24 @@ def get_nutrient_coverage():
                     "Protein": macros.get("Protein") + protein
                 })
 
+            energy_need = harris_benedict_formula(sex=user.get("sex"), weight=user.get("weight"), height=user.get("height"), age=user.get("age"), physical_activity=user.get("physical_activity"))
+            protein_factor = 0.8
+            fat_energy_percentage = 0.275
+            carbs_energy_percentage = 0.525
+
             stats.update({
                 "macroNutrients": [
                     {
                         "name": "Protein",
-                        "percentage": int(macros.get("Protein"))
+                        "percentage": min([int(macros.get("Protein") / float(user.get("weight") * protein_factor) * 100), 100])
                     },
                     {
                         "name": "Fats",
-                        "percentage": int(macros.get("Fats"))
+                        "percentage": min([int(float(macros.get("Fats") * 4.0) / float(energy_need * fat_energy_percentage) * 100), 100])
                     },
                     {
                         "name": "Carbohydrates",
-                        "percentage": int(macros.get("Carbohydrates"))
+                        "percentage": min([int(float(macros.get("Carbohydrates") * 4.0) / float(energy_need * carbs_energy_percentage) * 100), 100])
                     }
                 ]
             })

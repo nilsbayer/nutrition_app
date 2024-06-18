@@ -138,13 +138,13 @@ export function TrackFoodsPage () {
         return data;
     }
 
-    function showOverlay(type) {
+    function showOverlay(type, url) {
         console.log("Overlay opened", type)
         if (type === "usda") {
             console.log("This actually worked")
             overlayContent.value = {
                 title: "What is the data origin 'USDA'",
-                text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Ratione architecto quos alias dignissimos, quam hic asperiores, atque rem delectus ut minima ea! Omnis animi ad deserunt mollitia perspiciatis debitis vel."
+                text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Ratione architecto quos alias dignissimos, quam hic asperiores, atque rem delectus ut minima ea! Omnis animi ad deserunt mollitia perspiciatis debitis vel."+" "+url
             }
         }
     }
@@ -174,7 +174,7 @@ export function TrackFoodsPage () {
                 <div className="foods">
                     {(foodSuggestions) ? foodSuggestions.map((sug, index) => {
                         return <div key={index} className="shadow-box food">
-                            <span onClick={() => { showOverlay("usda") }} className='data-origin'>{sug.data_origin}</span>
+                            <span onClick={() => { showOverlay("usda", sug.data_url) }} className='data-origin'>{sug.data_origin}</span>
                             <img src="/src/img/lemon.png" alt="" className='food-img' />
                             <div className='food-details'>
                                 <span>{sug.food_name}</span>
@@ -305,7 +305,7 @@ export function TrackFoodsPage () {
             <div className="foods" style={{marginTop: "2rem"}}>
                 {(loggedFoods) ? loggedFoods.map((foodItem, index) => {
                     return <div key={index} className="shadow-box food">
-                        <span onClick={() => { showOverlay("usda") }} className='data-origin'>{foodItem.food_origin}</span>
+                        <span onClick={() => { showOverlay("usda", foodItem.scraped_url) }} className='data-origin'>{foodItem.food_origin}</span>
                         <img src="/src/img/lemon.png" alt="" className='food-img' />
                         <div className='food-details'>
                             <span>{foodItem.food_name}</span>
