@@ -5,6 +5,8 @@ import { user_vector, userRecommendationVector } from '../App'
 import { NavBar } from '../components/NavBar';
 import { v4 as uuidv4 } from 'uuid';
 import { ArticlesContainer } from '../components/ArticlesContainer';
+import { RecipesContainer } from '../components/RecipesContainer';
+import { ReachOut } from '../components/ReachOut';
 
 export function Dashboard () {
     const auth = useAuthUser()
@@ -153,14 +155,9 @@ export function Dashboard () {
                     </div>
                     <span>Loading statistics on micro- and macronutrients</span>
                 </div>
-                <div className="shadow-box recipe-box">
-                    <div className="recipe-header">
-                        <h3>Recommendations for your taste</h3>
-                    </div>
-                    <p>Based on your food preferences, we have put together a collection of recipes for you today</p>
-                    <p>Check them out now {">>>"}</p>
-                </div>
+                <RecipesContainer />
                 <ArticlesContainer />
+                <ReachOut />
             </div>
             <NavBar />
         </>
@@ -253,15 +250,10 @@ export function Dashboard () {
                         })}
                     </div>
                 </div>
-                <div className="shadow-box recipe-box">
-                    <div className="recipe-header">
-                        <h3>Recommendations for your taste</h3>
-                    </div>
-                    <p>Based on your food preferences, we have put together a collection of recipes for you today</p>
-                    <p>Check them out now {">>>"}</p>
-                </div>
-
+                
+                <RecipesContainer />
                 <ArticlesContainer />
+                <ReachOut />
             </div>
             <NavBar />
         </>

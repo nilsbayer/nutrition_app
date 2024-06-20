@@ -237,6 +237,9 @@ export function TrackFoodsPage () {
                 setLoadingFoods(false)
                 fetchTodaysFoods()
             }
+            else {
+                notfiyUser("Sorry, there was an technical error. Please try to log the food via image again.")
+            }
         })
     }
 

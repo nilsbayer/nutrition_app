@@ -38,7 +38,10 @@ export function ArticlesContainer () {
             <div className="recipe-header" id="article-header">
                 <h3>Curated Articles for you</h3>
             </div>
-            <span>Articles are being loaded</span>
+            <div className="loading-container" style={{paddingTop: "2rem"}}>
+                <div className="loading-circle"></div>
+                <span>Articles are being loaded</span>
+            </div>
         </div>
     }
 

@@ -55,6 +55,7 @@ user_col = db["users"]
 chatbot_logs_col = db["chatbot_logs_normal"]
 user_logs_col = db["user_logs"]
 articles_col = db["articles"]
+recipes_col = db["recipes"]
 
 sbert = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -844,7 +845,7 @@ def get_nutrient_coverage():
                     },
                     {
                         "name": "Fats",
-                        "percentage": min([int(float(macros.get("Fats") * 4.0) / float(energy_need * fat_energy_percentage) * 100), 100])
+                        "percentage": min([int(float(macros.get("Fats") * 9.0) / float(energy_need * fat_energy_percentage) * 100), 100])
                     },
                     {
                         "name": "Carbohydrates",
@@ -942,7 +943,78 @@ def detect_foods_in_image():
             else:
                 return jsonify({"msg": False, "details": "Data formatting issue"})
 
-            return jsonify({"msg": True, "detected": json_results, "llm":True})
+            # Add name embed (food_embedding) query and log detected foods
+            try:
+                # Turn LLM detections to database food entries with name, and id
+                starting_nutrient_vector = [float(0) for _ in range(17)]
+
+                db_foods = []
+                for llm_food in json_results:
+                    # Find closest food name wise in db
+                    query_embed = sbert.encode(str(llm_food.get("food_name")))
+                    pipeline = [
+                        {
+                            '$vectorSearch': {
+                                'index': 'food_name_search',
+                                'path': 'food_embedding', 
+                                'queryVector': query_embed.tolist(), 
+                                'numCandidates': 200, 
+                                'limit': 1
+                            }
+                        }
+                    ]
+                    db_food = [i for i in nutrient_col.aggregate(pipeline)]
+
+                    # Get the factor based on 1.0 being 100g
+                    grams_factor = float(llm_food.get("amount_in_grams")) / 100.0
+                    # calculate the nutrient amounts in the nutrient vector
+                    this_foods_nutrient_vector = [i*grams_factor for i in db_food[0].get("nutrient_vector")] 
+                    # Add this foods nutrient vector to the starting/changing vector
+                    starting_nutrient_vector = [a + b for a, b in zip(this_foods_nutrient_vector, starting_nutrient_vector)]
+
+                    db_foods.append({
+                        "food_name": db_food[0].get("food"),
+                        "food_id": db_food[0].get("_id"),
+                        "amount_in_grams": float(llm_food.get("amount_in_grams")),
+                        "food_origin": db_food[0].get("data_origin"),
+                        "dish": "lunch"
+                    })
+
+                # Check for existing db entry
+                res = user_logs_col.find_one({
+                    "date": str(datetime.today())[:10],
+                    "user_id": user.get("_id")
+                })
+                if res:
+                    # Sum up the newly created nutrient vector and the pre-existing one
+                    new_nutrient_vector = [a + b for a, b in zip(res.get("nutrient_vector"), starting_nutrient_vector)]
+
+                    # Update database with newly tracked foods for the day
+                    user_logs_col.update_one({
+                        "date": str(datetime.today())[:10],
+                        "user_id": user.get("_id")
+                    }, {
+                        "$push": {
+                            "logged_foods": {
+                                "$each": db_foods
+                            }
+                        },
+                        "$set": {
+                            "nutrient_vector": new_nutrient_vector
+                        }
+                    })
+                else:
+                    # Create first doc for that day
+                    user_logs_col.insert_one({
+                        "date": str(datetime.today())[:10],
+                        "user_id": user.get("_id"),
+                        "logged_foods": db_foods,
+                        "nutrient_vector": starting_nutrient_vector
+                    })
+
+                return jsonify({"msg": True, "llm": True})
+            except:
+                return jsonify({"msg": False, "details": "database issue"})
 
     return jsonify({"msg": False})
 
@@ -1133,6 +1205,76 @@ def remove_single_food():
                         return jsonify({"msg": False, "details": "database"})
                 else:
                     return jsonify({"msg": False, "details": "Log not found"})
+
+    return jsonify({"msg": False})
+
+@app.route("/api/get-recipe-recommendations", methods=["GET"])
+def get_recipes():
+    status, user = authenticate_cookies(request)
+    if status:
+        if request.method == "GET":
+            # Get todays, current nutrient vector of user from user_logs_col
+            todays_entry = user_logs_col.find_one({
+                "date": str(datetime.today())[:10],
+                "user_id": user.get("_id")
+            })
+
+            if todays_entry and len(todays_entry.get("logged_foods")) > 0:
+                if user.get("sex") == "female":
+                    user_vector = [max([0.0, (a - b)]) for a, b in zip(female_recommendation_vector, todays_entry.get("nutrient_vector"))]
+                else:
+                    user_vector = [max([0.0, (a - b)]) for a, b in zip(male_recommendation_vector, todays_entry.get("nutrient_vector"))]
+                
+            else:
+                # No foods consumed today 
+                if user.get("sex") == "female":
+                    user_vector = female_recommendation_vector
+                else:
+                    user_vector = male_recommendation_vector
+
+            if len(user_vector) != 17:
+                return jsonify({"msg": False, "vector": user_vector})
+            
+            # Standardization of user vector
+            res = means_stds_col.find_one()
+            std_user_vector = np.nan_to_num(((np.array(user_vector) - np.array(res.get("means"))) / np.array(res.get("stds"))), nan=0).tolist()
+
+            # Make vector search
+            # pipeline = [
+            #     {
+            #         '$vectorSearch': {
+            #             'index': 'recipe_recommendation_search',
+            #             'path': 'std_nutrient_vector', 
+            #             'queryVector': std_user_vector,
+            #             'numCandidates': 200, 
+            #             'limit': 10
+            #         }
+            #     }
+            # ]
+            # results = [i for i in nutrient_col.aggregate(pipeline)]
+            res = recipes_col.find()
+            results = [{"name": i.get("name"), "items": i.get("ingredients"), "std_vector": i.get("std_nutrient_vector")} for i in res]
+            cos_scores = util.cos_sim(std_user_vector, [i.get("std_vector") for i in results]).tolist()[0]
+
+            # Zip the lists together
+            zipped_lists = zip(cos_scores, results)
+
+            # Sort the zipped list based on the first list's values in descending order
+            sorted_zipped_lists = sorted(zipped_lists, key=lambda x: x[0], reverse=True)
+
+            # Unzip the sorted zipped list
+            _, sorted_list2 = zip(*sorted_zipped_lists)
+
+            results = list(sorted_list2)
+
+            for i in results:
+                for n in i.get("items"):
+                    n.update({"id": str(n.get("id"))})
+
+            return jsonify({"msg": True, "recipes": results})
+        
+        else:
+            return jsonify({"msg": False})
 
     return jsonify({"msg": False})
 

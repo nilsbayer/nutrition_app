@@ -94,6 +94,12 @@ export function SettingsPage() {
                 </p>
             </div>
             <div>
+                <span style={{fontWeight: "bolder"}}>Height</span>
+                <p>
+                    {userData.height} cm
+                </p>
+            </div>
+            <div>
                 <span style={{fontWeight: "bolder"}}>Account created</span>
                 <p>
                     {userData.account_created}
