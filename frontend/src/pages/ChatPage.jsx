@@ -88,7 +88,7 @@ export function ChatPage() {
         <div className="content-container">
             <div className="messages">
                 <div style={{padding: "2.5dvh"}} className="message app-message">
-                    <span>👋🏼 Hey {user.name}, what do you want to talk about today? Just ask me anything.</span>
+                    <span>👋🏼 Hey {user.name}, I am an AI chatbot which has access to scientific articles on nutrition, especially regarding plant-based diets. What do you want to talk about today? Just ask me anything.</span>
                 </div>
                 {allMessages.map((message, index) => {
                     if (message.role === "user") {

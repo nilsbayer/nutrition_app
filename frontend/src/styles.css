@@ -81,6 +81,7 @@ h1 {
     flex-direction: column;
     gap: .5rem;
     font-size: .8rem;
+    justify-content: end;
 }
 
 h3, h4 {

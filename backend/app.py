@@ -20,7 +20,6 @@ from ragas.metrics import (
     faithfulness,
     answer_relevancy,
     context_precision,
-    context_relevancy,
     context_recall,
     answer_similarity,
     answer_correctness,
